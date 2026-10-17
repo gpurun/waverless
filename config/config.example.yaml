@@ -113,3 +113,6 @@ gongji:
   default_resource_mark: "" # from resource/search; env GONGJI_DEFAULT_RESOURCE_MARK
   default_region_name: ""
   key_id: ""                # optional ops rotation id; env GONGJI_KEY_ID
+  regions_file: "config/regions.yaml"          # logical AZ registry; env GONGJI_REGIONS_FILE
+  region_state_file: ""                        # maintenance overlay; env GONGJI_REGION_STATE_FILE
+  inventory_fresh_seconds: 90                  # sellable window after a successful pull; env GONGJI_INVENTORY_FRESH_SECONDS

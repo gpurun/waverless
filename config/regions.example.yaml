@@ -1,0 +1,11 @@
+version: 1
+regions:
+  - logical_az_id: cn-hebei-az1
+    display_name: 华北·河北一区
+    compliance_domain: domestic
+    availability: schedulable
+    providers:
+      - provider_id: gongji
+        physical_region_id: hebeif-1
+        provider_sku_id: H20
+        gpu_count: 8

@@ -38,6 +38,7 @@ type Router struct {
 	monitoringHandler  *handler.MonitoringHandler
 	statusEventHandler *handler.StatusEventHandler
 	portalHandler      *handler.PortalHandler
+	gongjiHandler      *handler.GongjiHandler
 }
 
 // NewRouter creates a new Router
@@ -81,6 +82,13 @@ func NewRouter(
 	}
 }
 
+// SetGongjiHandler registers Gongji region and task routes when the provider is enabled.
+func (r *Router) SetGongjiHandler(h *handler.GongjiHandler) {
+	if r != nil {
+		r.gongjiHandler = h
+	}
+}
+
 // Setup configures all routes
 func (r *Router) Setup(engine *gin.Engine) {
 	// Global middleware
@@ -93,6 +101,7 @@ func (r *Router) Setup(engine *gin.Engine) {
 	r.setupAdminRoutes(engine)  // Admin API (/api/v1/*)
 	r.setupPortalRoutes(engine) // Portal Southbound API (/portal/v1/*)
 	r.setupHealthRoutes(engine) // Health check
+	r.setupGongjiRoutes(engine)
 
 	// Swagger API documentation UI
 	engine.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))

@@ -21,6 +21,7 @@ type Repository struct {
 	Worker           *WorkerRepository
 	Monitoring       *MonitoringRepository
 	StatusEvent      *StatusEventRepository
+	GongjiCatalog    *GongjiCatalogRepository
 }
 
 // NewRepository creates a new MySQL repository with all sub-repositories.
@@ -67,6 +68,7 @@ func newRepository(ds *Datastore) *Repository {
 		Worker:           NewWorkerRepository(ds),
 		Monitoring:       NewMonitoringRepository(ds),
 		StatusEvent:      NewStatusEventRepository(ds),
+		GongjiCatalog:    NewGongjiCatalogRepository(ds),
 	}
 }
 

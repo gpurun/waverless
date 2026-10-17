@@ -17,6 +17,7 @@ import (
 	"waverless/pkg/config"
 	"waverless/pkg/interfaces"
 	"waverless/pkg/logger"
+	"waverless/pkg/provider/gongji"
 	mysqlstore "waverless/pkg/store/mysql"
 	redisstore "waverless/pkg/store/redis"
 
@@ -54,6 +55,9 @@ type Application struct {
 	monitoringHandler  *handler.MonitoringHandler
 	statusEventHandler *handler.StatusEventHandler
 	portalHandler      *handler.PortalHandler
+	gongjiHandler      *handler.GongjiHandler
+
+	gongjiCatalog *gongji.Catalog
 
 	// Lifecycle Manager
 	lifecycleManager *lifecycle.Manager

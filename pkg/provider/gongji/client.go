@@ -11,8 +11,10 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -166,7 +168,7 @@ func (c *Client) doJSON(ctx context.Context, method, path string, query url.Valu
 	logger.Debugf("gongji %s %s", method, signPath)
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("gongji http: %w", err)
+		return nil, classifyTransport(err)
 	}
 	defer resp.Body.Close()
 
@@ -175,14 +177,35 @@ func (c *Client) doJSON(ctx context.Context, method, path string, query url.Valu
 		return nil, fmt.Errorf("read response: %w", err)
 	}
 
+	if resp.StatusCode == http.StatusTooManyRequests {
+		return nil, &Error{Code: CodeProviderRateLimited, Message: "gongji rate limited"}
+	}
+	if resp.StatusCode == http.StatusGatewayTimeout || resp.StatusCode == http.StatusRequestTimeout {
+		return nil, &Error{Code: CodeProviderTimeout, Message: "gongji request timed out"}
+	}
+
 	var apiResp APIResponse
 	if err := json.Unmarshal(respBody, &apiResp); err != nil {
-		return nil, fmt.Errorf("parse response (http %d): %w; body=%s", resp.StatusCode, err, truncate(string(respBody), 256))
+		if resp.StatusCode >= 500 {
+			return nil, &Error{Code: CodeProviderTimeout, Message: "gongji returned an unreadable error"}
+		}
+		return nil, fmt.Errorf("parse response (http %d): %w", resp.StatusCode, err)
 	}
 	if apiResp.Code != SuccessCode {
-		return &apiResp, fmt.Errorf("gongji api code=%s message=%s", apiResp.Code, apiResp.Text())
+		return &apiResp, vendorError(apiResp.Code, apiResp.Text())
 	}
 	return &apiResp, nil
+}
+
+func classifyTransport(err error) error {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return &Error{Code: CodeProviderTimeout, Message: "gongji request timed out"}
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return &Error{Code: CodeProviderTimeout, Message: "gongji request timed out"}
+	}
+	return fmt.Errorf("gongji http: %w", err)
 }
 
 func truncate(s string, n int) string {
@@ -219,9 +242,11 @@ func (c *Client) ChangePoints(ctx context.Context, taskID int64, points int) err
 	return err
 }
 
-// GetTaskDetail fetches task detail (desired/observed points).
+// GetTaskDetail fetches task detail via GET /api/deployment/task/detail?task_id=.
 func (c *Client) GetTaskDetail(ctx context.Context, taskID int64) (*TaskDetail, error) {
-	apiResp, err := c.doJSON(ctx, http.MethodPost, PathTaskDetail, nil, &TaskIDRequest{TaskID: taskID})
+	q := url.Values{}
+	q.Set("task_id", strconv.FormatInt(taskID, 10))
+	apiResp, err := c.doJSON(ctx, http.MethodGet, PathTaskDetail, q, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -233,6 +258,29 @@ func (c *Client) GetTaskDetail(ctx context.Context, taskID int64) (*TaskDetail, 
 		detail.TaskID = taskID
 	}
 	return &detail, nil
+}
+
+// PauseTask pauses a running deployment. Vendor releases the points.
+func (c *Client) PauseTask(ctx context.Context, taskID int64) error {
+	_, err := c.doJSON(ctx, http.MethodPost, PathTaskPause, nil, &TaskIDRequest{TaskID: taskID})
+	return err
+}
+
+// RecoverTask resumes a paused deployment.
+func (c *Client) RecoverTask(ctx context.Context, taskID int64) error {
+	_, err := c.doJSON(ctx, http.MethodPost, PathTaskRecover, nil, &TaskIDRequest{TaskID: taskID})
+	return err
+}
+
+// UpdateTask replaces a deployment configuration.
+// body must be the full task document from GetTaskDetail, with edits applied.
+// Partial documents are rejected by the vendor.
+func (c *Client) UpdateTask(ctx context.Context, body json.RawMessage) error {
+	if len(body) == 0 || string(body) == "null" {
+		return fmt.Errorf("update task body is required")
+	}
+	_, err := c.doJSON(ctx, http.MethodPost, PathTaskUpdate, nil, json.RawMessage(body))
+	return err
 }
 
 // StopTask deletes/stops a deployment task.
@@ -274,27 +322,146 @@ func (c *Client) ListPoints(ctx context.Context, taskID int64, page, pageSize in
 	return &data, nil
 }
 
-// SearchTasks searches tasks by name (best-effort).
-func (c *Client) SearchTasks(ctx context.Context, taskName string) ([]TaskDetail, error) {
-	apiResp, err := c.doJSON(ctx, http.MethodPost, PathTaskSearch, nil, &TaskSearchRequest{
-		TaskName: taskName,
-		Page:     1,
-		PageSize: 50,
-	})
+// SearchTasks lists deployment tasks. The vendor API is GET with query filters.
+func (c *Client) SearchTasks(ctx context.Context, filter TaskListFilter) (*TaskSearchData, error) {
+	q := taskListQuery(filter.Type, filter.Status, filter.SearchValue, filter.Page, filter.PageSize)
+	apiResp, err := c.doJSON(ctx, http.MethodGet, PathTaskSearch, q, nil)
 	if err != nil {
 		return nil, err
 	}
 	var data TaskSearchData
 	if len(apiResp.Data) == 0 || string(apiResp.Data) == "null" {
-		return nil, nil
+		return &TaskSearchData{}, nil
 	}
 	if err := json.Unmarshal(apiResp.Data, &data); err != nil {
-		// Some APIs return a bare array
-		var list []TaskDetail
-		if err2 := json.Unmarshal(apiResp.Data, &list); err2 == nil {
-			return list, nil
-		}
-		return nil, fmt.Errorf("parse search: %w", err)
+		return nil, fmt.Errorf("parse task search: %w", err)
 	}
-	return data.Results, nil
+	return &data, nil
+}
+
+// SearchResources loads device inventory, price, and resource marks.
+func (c *Client) SearchResources(ctx context.Context, filter ResourceSearchFilter) (*ResourceSearchData, error) {
+	q := url.Values{}
+	taskType := filter.TaskType
+	if taskType == "" {
+		taskType = TaskTypeDeploy
+	}
+	q.Set("task_type", taskType)
+	if filter.DeviceType != "" {
+		q.Set("device_type", filter.DeviceType)
+	}
+	apiResp, err := c.doJSON(ctx, http.MethodGet, PathResourceSearch, q, nil)
+	if err != nil {
+		return nil, err
+	}
+	var data ResourceSearchData
+	if len(apiResp.Data) == 0 || string(apiResp.Data) == "null" {
+		return &ResourceSearchData{}, nil
+	}
+	if err := json.Unmarshal(apiResp.Data, &data); err != nil {
+		return nil, fmt.Errorf("parse resource search: %w", err)
+	}
+	return &data, nil
+}
+
+// CreateJob creates a Job batch task.
+func (c *Client) CreateJob(ctx context.Context, req *CreateJobRequest) (*CreateTaskData, error) {
+	apiResp, err := c.doJSON(ctx, http.MethodPost, PathJobCreate, nil, req)
+	if err != nil {
+		return nil, err
+	}
+	var data CreateTaskData
+	if len(apiResp.Data) > 0 && string(apiResp.Data) != "null" {
+		if err := json.Unmarshal(apiResp.Data, &data); err != nil {
+			return nil, fmt.Errorf("parse job create: %w", err)
+		}
+	}
+	if data.TaskID == 0 {
+		return nil, fmt.Errorf("create job returned empty task_id")
+	}
+	return &data, nil
+}
+
+// GetJob returns the raw Job detail document.
+func (c *Client) GetJob(ctx context.Context, taskID int64) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("task_id", strconv.FormatInt(taskID, 10))
+	apiResp, err := c.doJSON(ctx, http.MethodGet, PathJobDetail, q, nil)
+	if err != nil {
+		return nil, err
+	}
+	if len(apiResp.Data) == 0 || string(apiResp.Data) == "null" {
+		return nil, fmt.Errorf("job %d not found", taskID)
+	}
+	return apiResp.Data, nil
+}
+
+// SearchJobs lists Job batch tasks.
+func (c *Client) SearchJobs(ctx context.Context, filter JobListFilter) (*JobListData, error) {
+	q := taskListQuery("", filter.Status, filter.SearchValue, filter.Page, filter.PageSize)
+	if filter.GroupTask != nil {
+		q.Set("group_task", strconv.FormatBool(*filter.GroupTask))
+	}
+	if filter.GroupID > 0 {
+		q.Set("group_id", strconv.FormatInt(filter.GroupID, 10))
+	}
+	apiResp, err := c.doJSON(ctx, http.MethodGet, PathJobSearch, q, nil)
+	if err != nil {
+		return nil, err
+	}
+	return decodeJobList(apiResp.Data)
+}
+
+// StopJob stops a Job batch task.
+func (c *Client) StopJob(ctx context.Context, taskID int64) error {
+	_, err := c.doJSON(ctx, http.MethodPost, PathJobStop, nil, &TaskIDRequest{TaskID: taskID})
+	return err
+}
+
+func taskListQuery(taskType, status, search string, page, pageSize int) url.Values {
+	if page <= 0 {
+		page = 1
+	}
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+	q := url.Values{}
+	if taskType != "" {
+		q.Set("type", taskType)
+	}
+	if status != "" {
+		q.Set("status", status)
+	}
+	if search != "" {
+		q.Set("search_value", search)
+	}
+	q.Set("page", strconv.Itoa(page))
+	q.Set("page_size", strconv.Itoa(pageSize))
+	return q
+}
+
+func decodeJobList(raw json.RawMessage) (*JobListData, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return &JobListData{}, nil
+	}
+	var envelope struct {
+		Count   int64             `json:"count"`
+		Results []json.RawMessage `json:"results"`
+	}
+	if err := json.Unmarshal(raw, &envelope); err != nil {
+		return nil, fmt.Errorf("parse job search: %w", err)
+	}
+	out := &JobListData{Count: envelope.Count, Results: make([]JobSummary, 0, len(envelope.Results))}
+	for _, item := range envelope.Results {
+		var summary JobSummary
+		if err := json.Unmarshal(item, &summary); err != nil {
+			return nil, fmt.Errorf("parse job row: %w", err)
+		}
+		summary.Raw = item
+		out.Results = append(out.Results, summary)
+	}
+	return out, nil
 }

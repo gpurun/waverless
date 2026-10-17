@@ -16,6 +16,8 @@ import (
 const (
 	labelTaskID       = "gongji_task_id"
 	labelResourceMark = "gongji_resource_mark"
+	labelLogicalAz    = "logical_az_id"
+	labelProviderSku  = "provider_sku_id"
 	labelWorkerPort   = "gongji_worker_port"
 	defaultWorkerPort = 8000
 )
@@ -28,7 +30,7 @@ type clientInterface interface {
 	StopTask(ctx context.Context, taskID int64) error
 	DeletePod(ctx context.Context, pointID int64) error
 	ListPoints(ctx context.Context, taskID int64, page, pageSize int) (*PointsListData, error)
-	SearchTasks(ctx context.Context, taskName string) ([]TaskDetail, error)
+	SearchTasks(ctx context.Context, filter TaskListFilter) (*TaskSearchData, error)
 }
 
 // GongjiDeploymentProvider implements CoreDeploymentProvider (and stubs for FullDeploymentProvider)
@@ -38,6 +40,7 @@ type GongjiDeploymentProvider struct {
 	config *config.GongjiConfig
 
 	taskCache sync.Map // endpoint name -> int64 taskID
+	catalog   *Catalog
 }
 
 // NewGongjiDeploymentProvider creates a Gongji provider from global config.
@@ -58,6 +61,13 @@ func NewGongjiDeploymentProvider(cfg *config.Config) (interfaces.DeploymentProvi
 		client: client,
 		config: &cfg.Gongji,
 	}, nil
+}
+
+// SetCatalog attaches the region catalog used to resolve resource marks.
+func (p *GongjiDeploymentProvider) SetCatalog(catalog *Catalog) {
+	if p != nil {
+		p.catalog = catalog
+	}
 }
 
 // Deploy creates a Gongji Deployment task with dynamic_pod_strategy.switch=false.
@@ -81,9 +91,9 @@ func (p *GongjiDeploymentProvider) Deploy(ctx context.Context, req *interfaces.D
 		maxReplicas = 1
 	}
 
-	mark := p.resolveResourceMark(req)
-	if mark == "" {
-		return nil, fmt.Errorf("gongji resource mark is required (config gongji.default_resource_mark or label %s)", labelResourceMark)
+	mark, err := p.resolveResourceMark(ctx, req)
+	if err != nil {
+		return nil, err
 	}
 
 	port := defaultWorkerPort
@@ -136,13 +146,26 @@ func (p *GongjiDeploymentProvider) Deploy(ctx context.Context, req *interfaces.D
 	}, nil
 }
 
-func (p *GongjiDeploymentProvider) resolveResourceMark(req *interfaces.DeployRequest) string {
+func (p *GongjiDeploymentProvider) resolveResourceMark(ctx context.Context, req *interfaces.DeployRequest) (string, error) {
 	if req.Labels != nil {
 		if m := req.Labels[labelResourceMark]; m != "" {
-			return m
+			return m, nil
 		}
 	}
-	return p.config.DefaultResourceMark
+	if p.catalog != nil && req.Labels != nil {
+		az := req.Labels[labelLogicalAz]
+		if az != "" {
+			mark, err := p.catalog.ResolveMark(az, req.Labels[labelProviderSku])
+			if err != nil {
+				return "", err
+			}
+			return mark, nil
+		}
+	}
+	if p.config != nil && p.config.DefaultResourceMark != "" {
+		return p.config.DefaultResourceMark, nil
+	}
+	return "", fmt.Errorf("gongji resource mark is required (config gongji.default_resource_mark, label %s, or logical_az_id)", labelResourceMark)
 }
 
 func formatEnv(env map[string]string) string {
@@ -364,9 +387,14 @@ func (p *GongjiDeploymentProvider) resolveTaskID(ctx context.Context, endpoint s
 		return v.(int64), nil
 	}
 	// Best-effort search by task name
-	list, err := p.client.SearchTasks(ctx, endpoint)
-	if err == nil {
-		for _, t := range list {
+	list, err := p.client.SearchTasks(ctx, TaskListFilter{
+		Type:        TaskTypeDeploy,
+		SearchValue: endpoint,
+		Page:        1,
+		PageSize:    50,
+	})
+	if err == nil && list != nil {
+		for _, t := range list.Results {
 			if t.TaskName == endpoint || strconv.FormatInt(t.TaskID, 10) == endpoint {
 				p.taskCache.Store(endpoint, t.TaskID)
 				return t.TaskID, nil

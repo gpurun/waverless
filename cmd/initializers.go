@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 
 	"waverless/app/handler"
 	"waverless/app/router"
 	"waverless/internal/service"
 	endpointsvc "waverless/internal/service/endpoint"
+	gongjisvc "waverless/internal/service/gongji"
 	"waverless/internal/service/lifecycle"
 	"waverless/pkg/autoscaler"
 	"waverless/pkg/capacity"
@@ -135,6 +137,9 @@ func (app *Application) initProviders() error {
 
 // initServices initializes service layer
 func (app *Application) initServices() error {
+	if err := app.initGongji(); err != nil {
+		return err
+	}
 
 	// Initialize worker service (MySQL-based)
 	app.workerService = service.NewWorkerService(
@@ -250,6 +255,63 @@ func (app *Application) initServices() error {
 		logger.WarnCtx(app.ctx, "Failed to setup resource releaser: %v (non-critical, continuing)", err)
 	}
 
+	return nil
+}
+
+// initGongji loads the logical AZ registry and starts inventory polling when Gongji is enabled.
+func (app *Application) initGongji() error {
+	if !app.config.Gongji.Enabled {
+		return nil
+	}
+	if app.config.Gongji.Token == "" {
+		return fmt.Errorf("gongji is enabled but token is empty")
+	}
+	client, err := gongji.NewClient(&app.config.Gongji)
+	if err != nil {
+		return fmt.Errorf("gongji client: %w", err)
+	}
+	fresh := time.Duration(app.config.Gongji.InventoryFreshSeconds) * time.Second
+	if fresh <= 0 {
+		poll := app.config.Gongji.PollInterval
+		if poll <= 0 {
+			poll = 30
+		}
+		fresh = time.Duration(poll*3) * time.Second
+	}
+	regionsFile := app.config.Gongji.RegionsFile
+	if regionsFile == "" {
+		regionsFile = "config/regions.yaml"
+	}
+	catalog := gongji.NewCatalog(client, gongji.CatalogConfig{
+		RegionsFile: regionsFile,
+		StateFile:   app.config.Gongji.RegionStateFile,
+		FreshTTL:    fresh,
+	})
+	if app.mysqlRepo != nil && app.mysqlRepo.GongjiCatalog != nil {
+		catalog.SetStore(app.mysqlRepo.GongjiCatalog)
+	} else if driver := app.config.MetadataDriver(); driver == "postgres" || driver == "postgresql" {
+		return fmt.Errorf("gongji enabled with postgres metadata requires a connected database")
+	}
+	if err := catalog.Load(app.ctx); err != nil {
+		return fmt.Errorf("gongji region registry: %w", err)
+	}
+	app.gongjiCatalog = catalog
+	if provider, ok := app.deploymentProvider.(*gongji.GongjiDeploymentProvider); ok {
+		provider.SetCatalog(catalog)
+	}
+	svc := gongjisvc.NewService(client, catalog)
+	if provider, ok := app.deploymentProvider.(*gongji.GongjiDeploymentProvider); ok {
+		svc.SetTaskBinder(provider)
+	}
+	app.gongjiHandler = handler.NewGongjiHandler(svc)
+
+	interval := time.Duration(app.config.Gongji.PollInterval) * time.Second
+	go catalog.Start(app.ctx, interval)
+	storeMode := "file"
+	if app.mysqlRepo != nil && app.mysqlRepo.GongjiCatalog != nil {
+		storeMode = "database"
+	}
+	logger.InfoCtx(app.ctx, "Gongji region catalog started (registry=%s, store=%s)", regionsFile, storeMode)
 	return nil
 }
 
@@ -495,6 +557,7 @@ func (app *Application) initHTTPServer() error {
 		app.statusEventHandler,
 		app.portalHandler,
 	)
+	r.SetGongjiHandler(app.gongjiHandler)
 
 	// Set Gin mode
 	gin.SetMode(app.config.Server.Mode)

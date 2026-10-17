@@ -5,18 +5,27 @@ import "encoding/json"
 // API paths (Gongji OpenAPI v1, base https://openapi.suanli.cn)
 const (
 	PathTaskCreate       = "/api/deployment/task/create"
+	PathTaskUpdate       = "/api/deployment/task/update"
 	PathTaskChangePoints = "/api/deployment/task/change_points"
 	PathTaskDetail       = "/api/deployment/task/detail"
 	PathTaskStop         = "/api/deployment/task/stop"
+	PathTaskPause        = "/api/deployment/task/pause"
+	PathTaskRecover      = "/api/deployment/task/recover"
 	PathTaskDeletePod    = "/api/deployment/task/delete_pod"
 	PathTaskPoints       = "/api/deployment/task/points"
 	PathTaskSearch       = "/api/deployment/task/search"
 	PathResourceSearch   = "/api/deployment/resource/search"
+	PathJobCreate        = "/api/task/job/create"
+	PathJobSearch        = "/api/task/job/search"
+	PathJobDetail        = "/api/task/job/detail"
+	PathJobStop          = "/api/task/job/stop"
 
 	APIVersion     = "1.0.0"
 	SuccessCode    = "0000"
 	DefaultBaseURL = "https://openapi.suanli.cn"
 	TaskTypeDeploy = "Deployment"
+	DeviceTypeGPU  = "GpuDevice"
+	DeviceTypeCPU  = "CpuDevice"
 )
 
 // APIResponse is the common Gongji response envelope.
@@ -138,13 +147,168 @@ type Point struct {
 	RegionName string `json:"region_name"`
 }
 
-type TaskSearchRequest struct {
-	TaskName string `json:"task_name,omitempty"`
-	Page     int    `json:"page,omitempty"`
-	PageSize int    `json:"page_size,omitempty"`
+// TaskListFilter is the query for GET /api/deployment/task/search.
+type TaskListFilter struct {
+	Type        string
+	Status      string
+	SearchValue string
+	Page        int
+	PageSize    int
 }
 
 type TaskSearchData struct {
 	Count   int64        `json:"count"`
 	Results []TaskDetail `json:"results"`
+}
+
+// DeviceResource is the vendor device shape nested under a region mark.
+type DeviceResource struct {
+	DeviceName string `json:"device_name"`
+	Region     string `json:"region"`
+	GPUName    string `json:"gpu_name"`
+	GPUCount   int    `json:"gpu_count"`
+	GPUMemory  int    `json:"gpu_memory"`
+	Memory     int    `json:"memory"`
+	CPUCores   int    `json:"cpu_cores"`
+}
+
+// ResourceMark is resources[].mark from resource search and task payloads.
+type ResourceMark struct {
+	Resource   *DeviceResource `json:"resource,omitempty"`
+	RegionName string          `json:"region_name,omitempty"`
+	Mark       string          `json:"mark"`
+}
+
+// ResourceRegion is one physical region offer inside a device.
+type ResourceRegion struct {
+	Region        string       `json:"region"`
+	RegionName    string       `json:"region_name"`
+	Mark          ResourceMark `json:"mark"`
+	Price         *int         `json:"price"`
+	DiscountPrice *int         `json:"discount_price"`
+	Inventory     int          `json:"inventory"`
+}
+
+// ResourceDevice is one row from GET /api/deployment/resource/search.
+type ResourceDevice struct {
+	DeviceName string           `json:"device_name"`
+	Regions    []ResourceRegion `json:"regions"`
+	GPUName    string           `json:"gpu_name"`
+	GPUMemory  int              `json:"gpu_memory"`
+	GPUCount   int              `json:"gpu_count"`
+	Memory     int              `json:"memory"`
+	CPUCores   int              `json:"cpu_cores"`
+	DiskSize   int              `json:"disk_size"`
+	DiskType   string           `json:"disk_type"`
+}
+
+// ResourceSearchFilter selects Deployment GPU/CPU inventory.
+type ResourceSearchFilter struct {
+	TaskType   string
+	DeviceType string
+}
+
+// ResourceSearchData is the resource search payload.
+type ResourceSearchData struct {
+	Count   int              `json:"count"`
+	Results []ResourceDevice `json:"results"`
+}
+
+// JobListFilter is the query for GET /api/task/job/search.
+type JobListFilter struct {
+	Status      string
+	SearchValue string
+	GroupTask   *bool
+	GroupID     int64
+	Page        int
+	PageSize    int
+}
+
+// JobSummary is the stable subset used to list Job tasks.
+type JobSummary struct {
+	TaskID   int64           `json:"task_id"`
+	TaskName string          `json:"task_name"`
+	Status   string          `json:"status"`
+	Points   int             `json:"points"`
+	SubType  string          `json:"sub_type,omitempty"`
+	Raw      json.RawMessage `json:"-"`
+}
+
+// JobListData is a page of Job tasks.
+type JobListData struct {
+	Count   int64        `json:"count"`
+	Results []JobSummary `json:"results"`
+}
+
+// JobEnv is a name/value pair on a Job container.
+type JobEnv struct {
+	Name  string `json:"name"`
+	Value string `json:"value,omitempty"`
+}
+
+// JobResourceWeight is required by the Job create schema.
+type JobResourceWeight struct {
+	CPUWeight int `json:"cpu_weight"`
+	MemWeight int `json:"mem_weight"`
+	GPUWeight int `json:"gpu_weight"`
+}
+
+// JobStartScript is the container command.
+type JobStartScript struct {
+	Command []string `json:"command,omitempty"`
+	Args    []string `json:"args,omitempty"`
+}
+
+// JobService is one container in a Job task.
+type JobService struct {
+	ServiceName    string             `json:"service_name"`
+	ServiceImage   string             `json:"service_image"`
+	ResourceWeight *JobResourceWeight `json:"resource_weight,omitempty"`
+	RemotePorts    []RemotePort       `json:"remote_ports,omitempty"`
+	Env            []JobEnv           `json:"env,omitempty"`
+	StartScript    *JobStartScript    `json:"start_script,omitempty"`
+}
+
+// JobModDefault is the non-indexed completion mode.
+type JobModDefault struct {
+	BackoffLimit  int    `json:"backoff_limit"`
+	RestartPolicy string `json:"restart_policy"`
+}
+
+// JobModIndex is the indexed completion mode.
+type JobModIndex struct {
+	IndexBackoffLimit int  `json:"index_backoff_limit"`
+	MaxFailedIndex    *int `json:"max_failed_index,omitempty"`
+}
+
+// JobModParam selects default or index completion. Exactly one branch is set.
+type JobModParam struct {
+	Default *JobModDefault `json:"default,omitempty"`
+	Index   *JobModIndex   `json:"index,omitempty"`
+}
+
+// JobSupport is the Job batch completion policy.
+type JobSupport struct {
+	EstimatedExecSec *int        `json:"estimated_exec_sec,omitempty"`
+	TimeoutSec       int         `json:"timeout_sec"`
+	Parallelism      int         `json:"parallelism"`
+	ModParam         JobModParam `json:"mod_param"`
+}
+
+// JobResource is one resources[] entry. Mark is required; nested resource is optional.
+type JobResource struct {
+	Resource   *DeviceResource `json:"resource,omitempty"`
+	RegionName string          `json:"region_name,omitempty"`
+	Mark       string          `json:"mark"`
+	Weight     *int            `json:"weight,omitempty"`
+}
+
+// CreateJobRequest creates a Gongji Job batch task.
+type CreateJobRequest struct {
+	TaskName   string        `json:"task_name"`
+	SubType    *string       `json:"sub_type,omitempty"`
+	Resources  []JobResource `json:"resources"`
+	Points     int           `json:"points"`
+	JobSupport JobSupport    `json:"job_support"`
+	Services   []JobService  `json:"services"`
 }

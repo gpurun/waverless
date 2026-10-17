@@ -177,3 +177,43 @@ func (r *Router) setupHealthRoutes(engine *gin.Engine) {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 }
+
+// setupGongjiRoutes exposes Gongji region maintenance and serverless/job lifecycle.
+// These sit on the existing admin API prefix and follow the same optional-auth boundary.
+func (r *Router) setupGongjiRoutes(engine *gin.Engine) {
+	if r.gongjiHandler == nil {
+		return
+	}
+	api := engine.Group("/api/v1/gongji")
+	{
+		api.GET("/regions", r.gongjiHandler.ListRegions)
+		api.GET("/regions/version", r.gongjiHandler.GetRegistryVersion)
+		api.GET("/inventory/pulls", r.gongjiHandler.ListInventoryPulls)
+		api.GET("/resources", r.gongjiHandler.ListResources)
+		api.POST("/resources/refresh", r.gongjiHandler.RefreshResources)
+		api.PUT("/regions/:logicalAzId/availability", r.gongjiHandler.SetAvailability)
+		api.PUT("/regions/bindings", r.gongjiHandler.UpsertBinding)
+
+		tasks := api.Group("/serverless/tasks")
+		{
+			tasks.GET("", r.gongjiHandler.ListServerless)
+			tasks.POST("", r.gongjiHandler.CreateServerless)
+			tasks.GET("/:taskId", r.gongjiHandler.GetServerless)
+			tasks.PUT("/:taskId", r.gongjiHandler.UpdateServerless)
+			tasks.DELETE("/:taskId", r.gongjiHandler.DeleteServerless)
+			tasks.POST("/:taskId/pause", r.gongjiHandler.PauseServerless)
+			tasks.POST("/:taskId/recover", r.gongjiHandler.RecoverServerless)
+			tasks.PUT("/:taskId/points", r.gongjiHandler.ScaleServerless)
+			tasks.GET("/:taskId/points", r.gongjiHandler.ListPoints)
+		}
+		api.DELETE("/serverless/points/:pointId", r.gongjiHandler.DeletePoint)
+
+		jobs := api.Group("/jobs")
+		{
+			jobs.GET("", r.gongjiHandler.ListJobs)
+			jobs.POST("", r.gongjiHandler.CreateJob)
+			jobs.GET("/:taskId", r.gongjiHandler.GetJob)
+			jobs.POST("/:taskId/stop", r.gongjiHandler.StopJob)
+		}
+	}
+}

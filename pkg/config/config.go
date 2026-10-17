@@ -285,17 +285,20 @@ type NovitaConfig struct {
 // GongjiConfig Gongji (共绩算力) OpenAPI provider configuration.
 // Credentials MUST come from Secret/env — never log token or signing_key.
 type GongjiConfig struct {
-	Enabled             bool   `yaml:"enabled"`               // Enable Gongji provider
-	BaseURL             string `yaml:"base_url"`              // Default https://openapi.suanli.cn
-	Token               string `yaml:"token"`                 // API token (env GONGJI_TOKEN)
-	SigningKey          string `yaml:"signing_key"`           // RSA private key PEM (env GONGJI_SIGNING_KEY); empty = token-only mode
-	APIVersion          string `yaml:"api_version"`           // Default 1.0.0
-	RequestTimeout      int    `yaml:"request_timeout"`       // Seconds, default 30
-	PollInterval        int    `yaml:"poll_interval"`         // Seconds, default 10
-	TenantID            int64  `yaml:"tenant_id"`             // Required for points list on some deployments
-	DefaultResourceMark string `yaml:"default_resource_mark"` // Default resources[].mark for Deploy
-	DefaultRegionName   string `yaml:"default_region_name"`   // Optional display region name
-	KeyID               string `yaml:"key_id"`                // Optional key id for ops rotation tracking
+	Enabled               bool   `yaml:"enabled"`                 // Enable Gongji provider
+	BaseURL               string `yaml:"base_url"`                // Default https://openapi.suanli.cn
+	Token                 string `yaml:"token"`                   // API token (env GONGJI_TOKEN)
+	SigningKey            string `yaml:"signing_key"`             // RSA private key PEM (env GONGJI_SIGNING_KEY); empty = token-only mode
+	APIVersion            string `yaml:"api_version"`             // Default 1.0.0
+	RequestTimeout        int    `yaml:"request_timeout"`         // Seconds, default 30
+	PollInterval          int    `yaml:"poll_interval"`           // Seconds, default 10
+	TenantID              int64  `yaml:"tenant_id"`               // Required for points list on some deployments
+	DefaultResourceMark   string `yaml:"default_resource_mark"`   // Default resources[].mark for Deploy
+	DefaultRegionName     string `yaml:"default_region_name"`     // Optional display region name
+	KeyID                 string `yaml:"key_id"`                  // Optional key id for ops rotation tracking
+	RegionsFile           string `yaml:"regions_file"`            // Logical AZ registry, default config/regions.yaml
+	RegionStateFile       string `yaml:"region_state_file"`       // Maintenance overlay; empty keeps it in memory
+	InventoryFreshSeconds int    `yaml:"inventory_fresh_seconds"` // How long a successful inventory pull stays sellable
 }
 
 // Init initializes configuration
@@ -468,6 +471,17 @@ func applyEnvOverrides(cfg *Config) {
 	}
 	if v := os.Getenv("GONGJI_KEY_ID"); v != "" {
 		cfg.Gongji.KeyID = v
+	}
+	if v := os.Getenv("GONGJI_REGIONS_FILE"); v != "" {
+		cfg.Gongji.RegionsFile = v
+	}
+	if v := os.Getenv("GONGJI_REGION_STATE_FILE"); v != "" {
+		cfg.Gongji.RegionStateFile = v
+	}
+	if v := os.Getenv("GONGJI_INVENTORY_FRESH_SECONDS"); v != "" {
+		if seconds, err := strconv.Atoi(v); err == nil && seconds > 0 {
+			cfg.Gongji.InventoryFreshSeconds = seconds
+		}
 	}
 }
 
