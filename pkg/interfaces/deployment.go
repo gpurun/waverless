@@ -221,17 +221,18 @@ type UpdateEndpointConfigRequest struct {
 	ImagePrefix     *string `json:"imagePrefix,omitempty"`     // Image prefix for matching updates
 
 	// Autoscaling configuration
-	MinReplicas       *int    `json:"minReplicas,omitempty"`       // Minimum replicas (0 = scale-to-zero)
-	MaxReplicas       *int    `json:"maxReplicas,omitempty"`       // Maximum replicas
-	Priority          *int    `json:"priority,omitempty"`          // Priority (0-100, 0 = best-effort)
-	ScaleUpThreshold  *int    `json:"scaleUpThreshold,omitempty"`  // Queue threshold for scale up
-	ScaleDownIdleTime *int    `json:"scaleDownIdleTime,omitempty"` // Idle time before scale down (seconds)
-	ScaleUpCooldown   *int    `json:"scaleUpCooldown,omitempty"`   // Scale up cooldown (seconds, 0 = no cooldown)
-	ScaleDownCooldown *int    `json:"scaleDownCooldown,omitempty"` // Scale down cooldown (seconds, 0 = no cooldown)
-	EnableDynamicPrio *bool   `json:"enableDynamicPrio,omitempty"` // Enable dynamic priority
-	HighLoadThreshold *int    `json:"highLoadThreshold,omitempty"` // High load threshold for priority boost
-	PriorityBoost     *int    `json:"priorityBoost,omitempty"`     // Priority boost amount (0 = no boost)
-	AutoscalerEnabled *string `json:"autoscalerEnabled,omitempty"` // Autoscaler override: "" = default, "disabled" = off, "enabled" = on
+	MinReplicas        *int    `json:"minReplicas,omitempty"`        // Minimum replicas (0 = scale-to-zero)
+	MaxReplicas        *int    `json:"maxReplicas,omitempty"`        // Maximum replicas
+	Priority           *int    `json:"priority,omitempty"`           // Priority (0-100, 0 = best-effort)
+	ScaleUpThreshold   *int    `json:"scaleUpThreshold,omitempty"`   // Queue threshold for scale up
+	ScaleUpWaitSeconds *int    `json:"scaleUpWaitSeconds,omitempty"` // Oldest pending age (seconds) for wait-age scale-up
+	ScaleDownIdleTime  *int    `json:"scaleDownIdleTime,omitempty"`  // Idle time before scale down (seconds)
+	ScaleUpCooldown    *int    `json:"scaleUpCooldown,omitempty"`    // Scale up cooldown (seconds, 0 = no cooldown)
+	ScaleDownCooldown  *int    `json:"scaleDownCooldown,omitempty"`  // Scale down cooldown (seconds, 0 = no cooldown)
+	EnableDynamicPrio  *bool   `json:"enableDynamicPrio,omitempty"`  // Enable dynamic priority
+	HighLoadThreshold  *int    `json:"highLoadThreshold,omitempty"`  // High load threshold for priority boost
+	PriorityBoost      *int    `json:"priorityBoost,omitempty"`      // Priority boost amount (0 = no boost)
+	AutoscalerEnabled  *string `json:"autoscalerEnabled,omitempty"`  // Autoscaler override: "" = default, "disabled" = off, "enabled" = on
 }
 
 // AppInfo application information

@@ -8,6 +8,7 @@ import (
 	"waverless/pkg/config"
 	"waverless/pkg/interfaces"
 	"waverless/pkg/provider/docker"
+	"waverless/pkg/provider/gongji"
 	"waverless/pkg/provider/k8s"
 	"waverless/pkg/provider/novita"
 )
@@ -34,9 +35,10 @@ var (
 // This function is thread-safe and can be called from multiple goroutines
 //
 // Example:
-//   provider.RegisterDeploymentProvider("custom", func(cfg *config.Config) (interfaces.DeploymentProvider, error) {
-//       return NewCustomProvider(cfg)
-//   })
+//
+//	provider.RegisterDeploymentProvider("custom", func(cfg *config.Config) (interfaces.DeploymentProvider, error) {
+//	    return NewCustomProvider(cfg)
+//	})
 func RegisterDeploymentProvider(name string, factory DeploymentFactory) {
 	if name == "" || factory == nil {
 		return
@@ -80,6 +82,8 @@ func init() {
 	RegisterDeploymentProvider("kubernetes", k8s.NewK8sDeploymentProvider)
 	RegisterDeploymentProvider("docker", docker.NewDockerDeploymentProvider)
 	RegisterDeploymentProvider("novita", novita.NewNovitaDeploymentProvider)
+	RegisterDeploymentProvider("gongji", gongji.NewGongjiDeploymentProvider)
+	RegisterDeploymentProvider("suanli", gongji.NewGongjiDeploymentProvider) // alias
 }
 
 func (f *ProviderFactory) CreateDeploymentProvider(providerType string) (interfaces.DeploymentProvider, error) {

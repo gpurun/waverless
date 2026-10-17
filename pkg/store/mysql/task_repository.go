@@ -133,6 +133,20 @@ func (r *TaskRepository) GetTasksByWorker(ctx context.Context, workerID string) 
 	return tasks, nil
 }
 
+// OldestPendingCreatedAt returns min(created_at) among PENDING tasks for the endpoint.
+// Used for wait-age scale-up; nil means no pending tasks.
+func (r *TaskRepository) OldestPendingCreatedAt(ctx context.Context, endpoint string) (*time.Time, error) {
+	var createdAt *time.Time
+	err := r.ds.DB(ctx).Model(&Task{}).
+		Select("MIN(created_at)").
+		Where("endpoint = ? AND status = ?", endpoint, "PENDING").
+		Scan(&createdAt).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to get oldest pending created_at: %w", err)
+	}
+	return createdAt, nil
+}
+
 // CountByEndpointAndStatus counts tasks by endpoint and status
 func (r *TaskRepository) CountByEndpointAndStatus(ctx context.Context, endpoint, status string) (int64, error) {
 	var count int64

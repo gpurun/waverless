@@ -31,6 +31,7 @@ type TaskRepositoryInterface interface {
 
 	// Statistics operations
 	CountByEndpointAndStatus(ctx context.Context, endpoint, status string) (int64, error)
+	OldestPendingCreatedAt(ctx context.Context, endpoint string) (*time.Time, error)
 	CountByStatus(ctx context.Context, status string) (int64, error)
 	CountInProgressByEndpoint(ctx context.Context, endpoint string) (int64, error)
 	CountWithTaskID(ctx context.Context, filters map[string]interface{}, taskID string) (int64, error)

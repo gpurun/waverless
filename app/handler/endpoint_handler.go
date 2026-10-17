@@ -369,6 +369,9 @@ func (h *EndpointHandler) UpdateEndpoint(c *gin.Context) {
 	if req.ScaleUpThreshold != nil {
 		existingMeta.ScaleUpThreshold = *req.ScaleUpThreshold
 	}
+	if req.ScaleUpWaitSeconds != nil {
+		existingMeta.ScaleUpWaitSeconds = *req.ScaleUpWaitSeconds
+	}
 	if req.ScaleDownIdleTime != nil {
 		existingMeta.ScaleDownIdleTime = *req.ScaleDownIdleTime
 	}

@@ -49,6 +49,7 @@ autoscaler:
   max_gpu_count: 100
   max_cpu_cores: 1000
   max_memory_gb: 2000
+  scale_up_wait_seconds: 60  # Global wait-age threshold (seconds); endpoint may override
   starvation_time: 300
 
 # Docker Registry Authentication (for private images)
@@ -84,7 +85,7 @@ notification:
   feishu_webhook_url: ""  # Example: "https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxx"
 
 providers:
-  deployment: "k8s"  # k8s, docker, novita
+  deployment: "k8s"  # k8s, docker, novita, gongji
   queue: "redis"     # redis, mysql
   metadata: "mysql"  # redis, mysql
 
@@ -95,3 +96,18 @@ novita:
   base_url: "https://api.novita.ai"  # Novita API base URL
   config_dir: "./config"  # Configuration directory (contains specs.yaml and templates/)
   poll_interval: 10  # Poll interval for status updates (seconds, default: 10)
+
+# Gongji (共绩算力) OpenAPI CoreDeploymentProvider — peer to Novita/RunPod (NOT K8s).
+# Credentials via env/Secret only: GONGJI_TOKEN, GONGJI_SIGNING_KEY (PEM), GONGJI_ENABLED=true
+gongji:
+  enabled: false
+  base_url: "https://openapi.suanli.cn"
+  token: ""                 # or env GONGJI_TOKEN
+  signing_key: ""           # RSA private key PEM; empty = token-only (simple) mode; env GONGJI_SIGNING_KEY
+  api_version: "1.0.0"
+  request_timeout: 30
+  poll_interval: 10
+  tenant_id: 0              # required for points list on some tenants; env GONGJI_TENANT_ID
+  default_resource_mark: "" # from resource/search; env GONGJI_DEFAULT_RESOURCE_MARK
+  default_region_name: ""
+  key_id: ""                # optional ops rotation id; env GONGJI_KEY_ID

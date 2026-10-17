@@ -16,6 +16,7 @@ import (
 	"waverless/pkg/interfaces"
 	"waverless/pkg/logger"
 	"waverless/pkg/provider"
+	"waverless/pkg/provider/gongji"
 	"waverless/pkg/provider/k8s"
 	"waverless/pkg/provider/novita"
 	"waverless/pkg/resource"
@@ -306,8 +307,8 @@ func (app *Application) initHandlers() error {
 	app.monitoringHandler = handler.NewMonitoringHandler(app.monitoringService)
 	app.portalHandler = handler.NewPortalHandler(app.taskService, app.workerService, app.endpointService, app.deploymentProvider)
 
-	// Initialize Endpoint Handler (for K8s or Novita)
-	if app.config.K8s.Enabled || app.config.Novita.Enabled {
+	// Initialize Endpoint Handler (for K8s, Novita, or Gongji)
+	if app.config.K8s.Enabled || app.config.Novita.Enabled || app.config.Gongji.Enabled {
 		if app.deploymentProvider == nil {
 			logger.ErrorCtx(app.ctx, "Deployment provider is enabled but provider is nil")
 		} else {
@@ -317,6 +318,9 @@ func (app *Application) initHandlers() error {
 			}
 			if app.config.Novita.Enabled {
 				logger.InfoCtx(app.ctx, "Endpoint handler initialized for Novita")
+			}
+			if app.config.Gongji.Enabled {
+				logger.InfoCtx(app.ctx, "Endpoint handler initialized for Gongji")
 			}
 		}
 	}
@@ -342,40 +346,79 @@ func (app *Application) initHandlers() error {
 	return nil
 }
 
-// initAutoScaler initializes auto-scaler
+// initAutoScaler initializes auto-scaler.
+// Attach is NOT gated solely on K8s.Enabled: Gongji/Novita (and other CoreDeploymentProvider
+// peers) get a Provider-driven scale loop that calls ScaleApp only.
 func (app *Application) initAutoScaler() error {
-	if !app.config.K8s.Enabled {
-		logger.InfoCtx(app.ctx, "K8s not enabled, skipping autoscaler initialization")
-		return nil
-	}
-
 	if !app.config.AutoScaler.Enabled {
 		logger.InfoCtx(app.ctx, "AutoScaler not enabled")
 		return nil
 	}
 
-	// Get spec manager from K8s deployment provider
-	var specManager *k8s.SpecManager
-	if k8sProvider, ok := app.deploymentProvider.(*k8s.K8sDeploymentProvider); ok {
-		specManager = k8sProvider.GetSpecManager()
-		// Inject spec service into spec manager for database access
-		// SpecService implements SpecRepositoryInterface
-		if app.specService != nil {
-			specManager.SetSpecRepository(app.specService)
-			logger.InfoCtx(app.ctx, "Spec service injected into SpecManager - specs will be read from database first")
+	hasK8sBackend := app.config.K8s.Enabled
+	hasProviderBackend := false
+	if app.deploymentProvider != nil {
+		switch app.deploymentProvider.(type) {
+		case *gongji.GongjiDeploymentProvider, *novita.NovitaDeploymentProvider:
+			hasProviderBackend = true
+		default:
+			// Also attach when providers.deployment is an external name even if type assertion differs
+			if app.config.Providers != nil {
+				switch app.config.Providers.Deployment {
+				case "gongji", "suanli", "novita", "runpod":
+					hasProviderBackend = true
+				}
+			}
 		}
-	} else {
-		logger.WarnCtx(app.ctx, "AutoScaler requires K8s deployment provider, skipping initialization")
+	}
+	if app.config.Gongji.Enabled || app.config.Novita.Enabled {
+		hasProviderBackend = true
+	}
+
+	if !hasK8sBackend && !hasProviderBackend {
+		logger.InfoCtx(app.ctx, "no scaler backend available (K8s disabled and no external provider); skip autoscaler")
 		return nil
 	}
 
+	var specManager *k8s.SpecManager
+	if hasK8sBackend {
+		if k8sProvider, ok := app.deploymentProvider.(*k8s.K8sDeploymentProvider); ok {
+			specManager = k8sProvider.GetSpecManager()
+			if app.specService != nil && specManager != nil {
+				specManager.SetSpecRepository(app.specService)
+				logger.InfoCtx(app.ctx, "Spec service injected into SpecManager - specs will be read from database first")
+			}
+		} else if !hasProviderBackend {
+			logger.WarnCtx(app.ctx, "K8s enabled but deployment provider is not K8s and no external provider backend; skip autoscaler")
+			return nil
+		}
+	}
+
+	if hasProviderBackend && specManager == nil {
+		logger.InfoCtx(app.ctx, "attaching Provider-driven autoscaler (ScaleApp path; no K8s SpecManager)")
+	}
+
 	autoscalerConfig := &autoscaler.Config{
-		Enabled:        app.config.AutoScaler.Enabled,
-		Interval:       app.config.AutoScaler.Interval,
-		MaxGPUCount:    app.config.AutoScaler.MaxGPUCount,
-		MaxCPUCores:    app.config.AutoScaler.MaxCPUCores,
-		MaxMemoryGB:    app.config.AutoScaler.MaxMemoryGB,
-		StarvationTime: app.config.AutoScaler.StarvationTime,
+		Enabled:            app.config.AutoScaler.Enabled,
+		Interval:           app.config.AutoScaler.Interval,
+		MaxGPUCount:        app.config.AutoScaler.MaxGPUCount,
+		MaxCPUCores:        app.config.AutoScaler.MaxCPUCores,
+		MaxMemoryGB:        app.config.AutoScaler.MaxMemoryGB,
+		StarvationTime:     app.config.AutoScaler.StarvationTime,
+		ScaleUpWaitSeconds: app.config.AutoScaler.ScaleUpWaitSeconds,
+	}
+
+	// External provider pools: do not use static cluster GPU ledger as a hard gate.
+	if hasProviderBackend && !hasK8sBackend {
+		if autoscalerConfig.MaxGPUCount == 0 {
+			autoscalerConfig.MaxGPUCount = -1 // unlimited sentinel (CanAllocate treats <0 as ok for GPU)
+		}
+		if autoscalerConfig.MaxCPUCores == 0 {
+			autoscalerConfig.MaxCPUCores = -1
+		}
+		if autoscalerConfig.MaxMemoryGB == 0 {
+			autoscalerConfig.MaxMemoryGB = -1
+		}
 	}
 
 	app.autoscalerMgr = autoscaler.NewManager(
