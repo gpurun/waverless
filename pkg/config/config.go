@@ -111,7 +111,7 @@ type RedisConfig struct {
 	DB       int    `yaml:"db"`
 }
 
-// MySQLConfig MySQL configuration
+// MySQLConfig legacy MySQL configuration (unused; metadata is PostgreSQL-only).
 type MySQLConfig struct {
 	Host     string       `yaml:"host"`
 	Port     int          `yaml:"port"`
@@ -130,6 +130,9 @@ type PostgreSQLConfig struct {
 	Database string `yaml:"database"`
 	SSLMode  string `yaml:"sslmode"`  // disable, require, verify-ca, verify-full (default: disable)
 	TimeZone string `yaml:"timezone"` // session time zone (default: UTC)
+	// Optional full connection string (libpq keyword/value or postgres:// URL).
+	// Environment variable DATABASE_URL overrides this and all discrete fields when connecting.
+	URL string `yaml:"url"`
 }
 
 // DSN builds a libpq keyword/value connection string for PostgreSQL.
@@ -236,12 +239,28 @@ type ProvidersConfig struct {
 }
 
 // MetadataDriver returns the configured metadata storage driver.
-// Falls back to "mysql" when providers.metadata is unset.
+// Falls back to "postgres" when providers.metadata is unset.
 func (c *Config) MetadataDriver() string {
 	if c.Providers != nil && c.Providers.Metadata != "" {
-		return c.Providers.Metadata
+		driver := strings.ToLower(strings.TrimSpace(c.Providers.Metadata))
+		if driver == "postgresql" {
+			return "postgres"
+		}
+		return driver
 	}
-	return "mysql"
+	return "postgres"
+}
+
+// MetadataDSN returns the PostgreSQL connection string for the metadata store.
+// Precedence: DATABASE_URL env → postgres.url in config → libpq DSN from discrete fields.
+func (c *Config) MetadataDSN() string {
+	if v := os.Getenv("DATABASE_URL"); v != "" {
+		return v
+	}
+	if c.Postgres.URL != "" {
+		return c.Postgres.URL
+	}
+	return c.Postgres.DSN()
 }
 
 // AutoScalerConfig autoscaler configuration
@@ -329,7 +348,7 @@ func Init() error {
 // applyEnvOverrides applies environment variable overrides to the configuration.
 // Environment variables take precedence over config file values.
 func applyEnvOverrides(cfg *Config) {
-	// Metadata storage provider selection (mysql | postgres).
+	// Metadata storage provider selection (postgres only at runtime).
 	if v := os.Getenv("METADATA_PROVIDER"); v != "" {
 		if cfg.Providers == nil {
 			cfg.Providers = &ProvidersConfig{}
@@ -337,7 +356,7 @@ func applyEnvOverrides(cfg *Config) {
 		cfg.Providers.Metadata = v
 	}
 
-	// PostgreSQL configuration
+	// PostgreSQL configuration (PG_* and POSTGRES_* aliases)
 	if v := os.Getenv("PG_HOST"); v != "" {
 		cfg.Postgres.Host = v
 	}
@@ -359,6 +378,32 @@ func applyEnvOverrides(cfg *Config) {
 		cfg.Postgres.SSLMode = v
 	}
 	if v := os.Getenv("PG_TIMEZONE"); v != "" {
+		cfg.Postgres.TimeZone = v
+	}
+	if v := os.Getenv("POSTGRES_HOST"); v != "" {
+		cfg.Postgres.Host = v
+	}
+	if v := os.Getenv("POSTGRES_PORT"); v != "" {
+		if port, err := strconv.Atoi(v); err == nil {
+			cfg.Postgres.Port = port
+		}
+	}
+	if v := os.Getenv("POSTGRES_USER"); v != "" {
+		cfg.Postgres.User = v
+	}
+	if v := os.Getenv("POSTGRES_PASSWORD"); v != "" {
+		cfg.Postgres.Password = v
+	}
+	if v := os.Getenv("POSTGRES_DB"); v != "" {
+		cfg.Postgres.Database = v
+	}
+	if v := os.Getenv("POSTGRES_DATABASE"); v != "" {
+		cfg.Postgres.Database = v
+	}
+	if v := os.Getenv("POSTGRES_SSLMODE"); v != "" {
+		cfg.Postgres.SSLMode = v
+	}
+	if v := os.Getenv("POSTGRES_TIMEZONE"); v != "" {
 		cfg.Postgres.TimeZone = v
 	}
 

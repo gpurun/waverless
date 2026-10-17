@@ -1,3 +1,4 @@
+# DEPRECATED: Waverless no longer uses MySQL. Use k8s/postgres-deployment.yaml instead.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

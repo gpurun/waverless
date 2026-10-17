@@ -42,15 +42,15 @@ func NewPostgresRepository(dsn string, proxyConfig *config.ProxyConfig) (*Reposi
 	return newRepository(ds), nil
 }
 
-// NewRepositoryForDriver creates a repository for the given driver ("mysql" or "postgres").
+// NewRepositoryForDriver creates a repository for the given driver (postgres only at runtime).
 func NewRepositoryForDriver(driver, dsn string, proxyConfig *config.ProxyConfig) (*Repository, error) {
 	switch driver {
-	case "", DialectMySQL, "mariadb":
-		return NewRepository(dsn, proxyConfig)
-	case DialectPostgres, "postgresql":
+	case "", DialectPostgres, "postgresql":
 		return NewPostgresRepository(dsn, proxyConfig)
+	case DialectMySQL, "mariadb":
+		return nil, fmt.Errorf("metadata driver %q is no longer supported; use postgres", driver)
 	default:
-		return nil, fmt.Errorf("unsupported metadata driver: %s", driver)
+		return nil, fmt.Errorf("unsupported metadata driver: %s (only postgres is supported)", driver)
 	}
 }
 

@@ -105,7 +105,7 @@ func (app *Application) Initialize() error {
 	}{
 		{"Configuration", app.initConfig},
 		{"Logging", app.initLogger},
-		{"MySQL", app.initMySQL},
+		{"Metadata store (PostgreSQL)", app.initMetadataStore},
 		{"Redis", app.initRedis},
 		{"Business Providers", app.initProviders},
 		{"Service Layer", app.initServices},
