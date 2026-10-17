@@ -29,6 +29,7 @@ type Config struct {
 	Providers        *ProvidersConfig       `yaml:"providers,omitempty"` // Providers configuration (optional)
 	Novita           NovitaConfig           `yaml:"novita"`              // Novita serverless configuration
 	Gongji           GongjiConfig           `yaml:"gongji"`              // Gongji (共绩) OpenAPI provider
+	Placement        PlacementConfig        `yaml:"placement"`           // Auto provider selection (M1)
 	ImageValidation  ImageValidationConfig  `yaml:"imageValidation"`     // Image validation configuration
 	ResourceReleaser ResourceReleaserConfig `yaml:"resourceReleaser"`    // Resource releaser configuration
 }
@@ -233,9 +234,10 @@ type AWSConfig struct {
 
 // ProvidersConfig providers configuration
 type ProvidersConfig struct {
-	Deployment string `yaml:"deployment"` // Deployment provider: k8s, docker, custom
-	Queue      string `yaml:"queue"`      // Queue provider: redis, mysql, postgres
-	Metadata   string `yaml:"metadata"`   // Metadata storage: redis, mysql, postgres
+	Deployment  string   `yaml:"deployment"`  // DEPRECATED: use deployments
+	Deployments []string `yaml:"deployments"` // Active deployment providers for ProviderHub
+	Queue       string   `yaml:"queue"`       // Queue provider: redis, mysql, postgres
+	Metadata    string   `yaml:"metadata"`    // Metadata storage: redis, mysql, postgres
 }
 
 // MetadataDriver returns the configured metadata storage driver.
@@ -588,5 +590,20 @@ func validateAndApplyDefaults(cfg *Config) {
 		log.Printf("[WARN] Invalid resourceReleaser.maxRetries value '%d', using default '%d'",
 			cfg.ResourceReleaser.MaxRetries, releaserDefaults.MaxRetries)
 		cfg.ResourceReleaser.MaxRetries = releaserDefaults.MaxRetries
+	}
+
+	if cfg.Placement.Strategy == "" && cfg.Placement.ImageNotReadyPenalty == 0 {
+		cfg.Placement = DefaultPlacementConfig()
+	} else {
+		placementDefaults := DefaultPlacementConfig()
+		if cfg.Placement.Strategy == "" {
+			cfg.Placement.Strategy = placementDefaults.Strategy
+		}
+		if cfg.Placement.ImageNotReadyPenalty <= 0 {
+			cfg.Placement.ImageNotReadyPenalty = placementDefaults.ImageNotReadyPenalty
+		}
+		if cfg.Placement.Pooling.MaxSlicesPerEndpoint <= 0 {
+			cfg.Placement.Pooling.MaxSlicesPerEndpoint = placementDefaults.Pooling.MaxSlicesPerEndpoint
+		}
 	}
 }

@@ -6,11 +6,14 @@ import (
 	"sync"
 
 	"waverless/pkg/config"
+	"waverless/pkg/hub"
 	"waverless/pkg/interfaces"
+	"waverless/pkg/placement"
 	"waverless/pkg/provider/docker"
 	"waverless/pkg/provider/gongji"
 	"waverless/pkg/provider/k8s"
 	"waverless/pkg/provider/novita"
+	"waverless/pkg/store/mysql"
 )
 
 // ProviderFactory provider factory
@@ -105,20 +108,63 @@ func (f *ProviderFactory) CreateDeploymentProvider(providerType string) (interfa
 // BusinessProviders business providers collection
 type BusinessProviders struct {
 	Deployment interfaces.DeploymentProvider
+	Hub        *hub.Hub
+}
+
+// HubBundle wires ProviderHub when metadata repositories are available.
+type HubBundle struct {
+	Hub        *hub.Hub
+	Deployment interfaces.DeploymentProvider
+}
+
+// CreateHub creates a ProviderHub and hub-facing DeploymentProvider.
+func (f *ProviderFactory) CreateHub(meta *mysql.Repository) (*HubBundle, error) {
+	deployments := f.cfg.EnabledDeployments()
+	if len(deployments) == 0 {
+		return nil, fmt.Errorf("no enabled deployment providers in config")
+	}
+	var placementSvc *placement.Service
+	if meta != nil && meta.ProviderOffers != nil {
+		placementSvc = placement.NewService(meta.ProviderOffers, f.cfg.Placement)
+	}
+	providerHub := hub.New(f.cfg, meta.ProviderSlice, meta.Endpoint, placementSvc)
+	for _, id := range deployments {
+		p, err := f.CreateDeploymentProvider(id)
+		if err != nil {
+			return nil, fmt.Errorf("create deployment provider %s: %w", id, err)
+		}
+		providerHub.Register(id, p)
+	}
+	if err := providerHub.EnsureRegistered(); err != nil {
+		return nil, err
+	}
+	return &HubBundle{
+		Hub:        providerHub,
+		Deployment: hub.NewDeploymentProvider(providerHub),
+	}, nil
 }
 
 // CreateBusinessProviders creates business providers
-func (f *ProviderFactory) CreateBusinessProviders() (*BusinessProviders, error) {
-	deploymentType := "k8s"
-	if f.cfg.Providers != nil && f.cfg.Providers.Deployment != "" {
-		deploymentType = f.cfg.Providers.Deployment
+func (f *ProviderFactory) CreateBusinessProviders(meta *mysql.Repository) (*BusinessProviders, error) {
+	if meta != nil {
+		bundle, err := f.CreateHub(meta)
+		if err != nil {
+			return nil, err
+		}
+		return &BusinessProviders{
+			Deployment: bundle.Deployment,
+			Hub:        bundle.Hub,
+		}, nil
 	}
-
-	deploymentProvider, err := f.CreateDeploymentProvider(deploymentType)
+	deployments := f.cfg.EnabledDeployments()
+	id := "k8s"
+	if len(deployments) > 0 {
+		id = deployments[0]
+	}
+	deploymentProvider, err := f.CreateDeploymentProvider(id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create deployment provider: %w", err)
 	}
-
 	return &BusinessProviders{
 		Deployment: deploymentProvider,
 	}, nil

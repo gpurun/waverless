@@ -53,6 +53,7 @@ type Catalog struct {
 	freshUntil               time.Time
 	lastError                string
 	everSuccess              bool
+	onInventorySuccess       func(context.Context)
 }
 
 type observedOffer struct {
@@ -154,6 +155,11 @@ func NewCatalog(source ResourceSource, cfg CatalogConfig) *Catalog {
 // SetStore enables database-backed registry and versioned inventory snapshots.
 func (c *Catalog) SetStore(store CatalogStore) {
 	c.store = store
+}
+
+// SetOnInventorySuccess registers a callback after each successful inventory pull.
+func (c *Catalog) SetOnInventorySuccess(fn func(context.Context)) {
+	c.onInventorySuccess = fn
 }
 
 // SetClock overrides the clock. Tests use it.
@@ -348,6 +354,9 @@ func (c *Catalog) Refresh(ctx context.Context) error {
 	c.lastError = ""
 	c.everSuccess = true
 	c.recordPullLocked(ctx, InventoryPullStatusSuccess, "", next, len(data.Results), now, &freshUntil)
+	if c.onInventorySuccess != nil {
+		c.onInventorySuccess(ctx)
+	}
 	return nil
 }
 

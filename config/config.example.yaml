@@ -87,9 +87,16 @@ notification:
   feishu_webhook_url: ""  # Example: "https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxx"
 
 providers:
-  deployment: "k8s"  # k8s, docker, novita, gongji
-  queue: "redis"     # redis
-  metadata: "postgres"  # postgres (required for persistent metadata)
+  deployments: [k8s]   # multi-provider: [gongji, novita]; env PROVIDERS_DEPLOYMENTS
+  deployment: "k8s"    # DEPRECATED alias for single entry
+  queue: "redis"       # redis
+  metadata: "postgres" # postgres (required for persistent metadata)
+
+placement:
+  strategy: greedy_cost
+  image_not_ready_penalty: 1.0
+  allow_cold_start: true
+  candidate_providers: []
 
 # Novita Serverless Configuration
 novita:

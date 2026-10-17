@@ -282,6 +282,15 @@ func findSubstring(s, substr string) bool {
 // Returns:
 //   - error if the database update fails
 //
+// UpdatePlacementFields updates hub/placement columns on an endpoint row.
+func (r *EndpointRepository) UpdatePlacementFields(ctx context.Context, endpointName string, updates map[string]interface{}) error {
+	if len(updates) == 0 {
+		return nil
+	}
+	updates["updated_at"] = gorm.Expr("CURRENT_TIMESTAMP(3)")
+	return r.ds.DB(ctx).Model(&Endpoint{}).Where("endpoint = ?", endpointName).Updates(updates).Error
+}
+
 func (r *EndpointRepository) UpdateStatusSummary(ctx context.Context, endpointName string, statusSummary map[string]any) error {
 	now := time.Now()
 	updates := map[string]any{

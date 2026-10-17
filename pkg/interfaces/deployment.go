@@ -181,6 +181,17 @@ type DeployRequest struct {
 	// min/max  other provider need
 	MinReplicas int `json:"minReplicas,omitempty"` // Minimum replica count (default 0)
 	MaxReplicas int `json:"maxReplicas,omitempty"` // Maximum replica count (default 10)
+
+	// ProviderHub / Placement (M1)
+	GpuType          string   `json:"gpuType,omitempty"`
+	BillingMode      string   `json:"billingMode,omitempty"`
+	LogicalImage     string   `json:"logicalImage,omitempty"`
+	ImageDigest      string   `json:"imageDigest,omitempty"`
+	PlacementMode    string   `json:"placementMode,omitempty"` // auto | pin
+	RegionAllowlist  []string `json:"regionAllowlist,omitempty"`
+	PinnedProviderID string   `json:"pinnedProviderId,omitempty"`
+	EndpointMode     string   `json:"endpointMode,omitempty"`       // http_service | queue_worker
+	ExternalEndpointID string `json:"externalEndpointId,omitempty"` // gpus computeBaseId
 }
 
 // RegistryCredential for private container registries

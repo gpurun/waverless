@@ -15,6 +15,7 @@ import (
 	"waverless/pkg/autoscaler"
 	"waverless/pkg/capacity"
 	"waverless/pkg/config"
+	"waverless/pkg/hub"
 	"waverless/pkg/interfaces"
 	"waverless/pkg/logger"
 	"waverless/pkg/provider/gongji"
@@ -33,6 +34,7 @@ type Application struct {
 
 	// Business providers
 	deploymentProvider interfaces.DeploymentProvider
+	providerHub        *hub.Hub
 
 	// Service layer
 	endpointService    *endpointsvc.Service

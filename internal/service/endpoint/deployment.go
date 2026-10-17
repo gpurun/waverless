@@ -190,6 +190,13 @@ func (m *DeploymentManager) Deploy(ctx context.Context, req *interfaces.DeployRe
 			return resp, fmt.Errorf("deployment succeeded but failed to persist metadata: %w", err)
 		}
 	}
+	if committer, ok := m.provider.(interface {
+		CommitSlice(context.Context, string) error
+	}); ok {
+		if err := committer.CommitSlice(ctx, req.Endpoint); err != nil {
+			return resp, fmt.Errorf("deployment succeeded but failed to persist provider slice: %w", err)
+		}
+	}
 
 	return resp, nil
 }

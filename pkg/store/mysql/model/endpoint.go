@@ -37,6 +37,14 @@ type Endpoint struct {
 	// Status summary fields for aggregated worker status information
 	StatusSummary       JSONMap    `gorm:"column:status_summary;type:jsonb" json:"status_summary,omitempty"`
 	LastStatusSummaryAt *time.Time `gorm:"column:last_status_summary_at;type:timestamptz(3)" json:"last_status_summary_at,omitempty"`
+	GPUType             string     `gorm:"column:gpu_type;type:varchar(64);not null;default:''" json:"gpu_type"`
+	PlacementMode       string     `gorm:"column:placement_mode;type:varchar(32);not null;default:auto" json:"placement_mode"`
+	BillingMode         string     `gorm:"column:billing_mode;type:varchar(32);not null;default:on_demand" json:"billing_mode"`
+	LogicalImage        string     `gorm:"column:logical_image;type:varchar(512);not null;default:''" json:"logical_image"`
+	RegionAllowlist     JSONStringArray `gorm:"column:region_allowlist;type:jsonb;not null;default:'[]'" json:"region_allowlist"`
+	EndpointMode        string     `gorm:"column:endpoint_mode;type:varchar(32);not null;default:http_service" json:"endpoint_mode"`
+	ExternalEndpointID  string     `gorm:"column:external_endpoint_id;type:varchar(255);not null;default:''" json:"external_endpoint_id"`
+	ActiveSliceID       *int64     `gorm:"column:active_slice_id" json:"active_slice_id,omitempty"`
 	CreatedAt           time.Time  `gorm:"column:created_at;type:timestamptz(3);not null;default:CURRENT_TIMESTAMP(3);index:idx_created_at" json:"created_at"`
 	UpdatedAt           time.Time  `gorm:"column:updated_at;type:timestamptz(3);not null;default:CURRENT_TIMESTAMP(3)" json:"updated_at"`
 }

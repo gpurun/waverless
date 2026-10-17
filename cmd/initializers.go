@@ -12,6 +12,7 @@ import (
 	endpointsvc "waverless/internal/service/endpoint"
 	gongjisvc "waverless/internal/service/gongji"
 	"waverless/internal/service/lifecycle"
+	"waverless/pkg/placement"
 	"waverless/pkg/autoscaler"
 	"waverless/pkg/capacity"
 	"waverless/pkg/config"
@@ -105,12 +106,13 @@ func (app *Application) initProviders() error {
 	factory := provider.NewProviderFactory(app.config)
 
 	// Create business providers (Deployment, Queue)
-	providers, err := factory.CreateBusinessProviders()
+	providers, err := factory.CreateBusinessProviders(app.mysqlRepo)
 	if err != nil {
 		return fmt.Errorf("failed to create business providers: %w", err)
 	}
 
 	app.deploymentProvider = providers.Deployment
+	app.providerHub = providers.Hub
 
 	// Register cleanup for K8s provider
 	if k8sProv, ok := providers.Deployment.(*k8s.K8sDeploymentProvider); ok {
@@ -284,12 +286,21 @@ func (app *Application) initGongji() error {
 		return fmt.Errorf("gongji region registry: %w", err)
 	}
 	app.gongjiCatalog = catalog
-	if provider, ok := app.deploymentProvider.(*gongji.GongjiDeploymentProvider); ok {
-		provider.SetCatalog(catalog)
+	if gp := app.gongjiDeploymentProvider(); gp != nil {
+		gp.SetCatalog(catalog)
+	}
+	if app.mysqlRepo != nil && app.mysqlRepo.ProviderOffers != nil {
+		syncOffers := func(ctx context.Context) {
+			if err := placement.SyncGongjiCatalog(ctx, catalog, app.mysqlRepo.ProviderOffers); err != nil {
+				logger.WarnCtx(ctx, "Gongji offer sync failed: %v", err)
+			}
+		}
+		catalog.SetOnInventorySuccess(syncOffers)
+		syncOffers(app.ctx)
 	}
 	svc := gongjisvc.NewService(client, catalog)
-	if provider, ok := app.deploymentProvider.(*gongji.GongjiDeploymentProvider); ok {
-		svc.SetTaskBinder(provider)
+	if gp := app.gongjiDeploymentProvider(); gp != nil {
+		svc.SetTaskBinder(gp)
 	}
 	app.gongjiHandler = handler.NewGongjiHandler(svc)
 
@@ -784,4 +795,18 @@ func (app *Application) propagateCapacityFailureToWorkers(event interfaces.Capac
 
 	logger.InfoCtx(ctx, "propagateCapacityFailure: updated %d WAITING_NODE workers for spec %s with capacity failure info",
 		len(workers), specName)
+}
+
+func (app *Application) gongjiDeploymentProvider() *gongji.GongjiDeploymentProvider {
+	if app.providerHub != nil {
+		if p, ok := app.providerHub.Get("gongji"); ok {
+			if gp, ok := p.(*gongji.GongjiDeploymentProvider); ok {
+				return gp
+			}
+		}
+	}
+	if p, ok := app.deploymentProvider.(*gongji.GongjiDeploymentProvider); ok {
+		return p
+	}
+	return nil
 }
