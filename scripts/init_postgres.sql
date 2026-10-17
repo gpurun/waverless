@@ -92,6 +92,9 @@ CREATE TABLE IF NOT EXISTS endpoints (
   region_allowlist jsonb NOT NULL DEFAULT '[]'::jsonb,
   endpoint_mode varchar(32) NOT NULL DEFAULT 'http_service',
   external_endpoint_id varchar(255) NOT NULL DEFAULT '',
+  public_host varchar(255) NOT NULL DEFAULT '',
+  gateway_route_version bigint NOT NULL DEFAULT 0,
+  gateway_status varchar(32) NOT NULL DEFAULT '',
   active_slice_id bigint DEFAULT NULL,
   created_at timestamptz(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_at timestamptz(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
@@ -168,6 +171,7 @@ CREATE TABLE IF NOT EXISTS workers (
   spot_instance_type varchar(64) DEFAULT NULL,
   provider_id varchar(32) NOT NULL DEFAULT '',
   slice_id bigint DEFAULT NULL,
+  backend_url varchar(512) NOT NULL DEFAULT '',
   created_at timestamptz(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_at timestamptz(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
 );

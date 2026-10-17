@@ -12,6 +12,8 @@ import (
 	imodel "waverless/internal/model"
 	"waverless/internal/service"
 	endpointsvc "waverless/internal/service/endpoint"
+	"waverless/pkg/config"
+	"waverless/pkg/gateway"
 	"waverless/pkg/interfaces"
 	"waverless/pkg/logger"
 	"waverless/pkg/placement"
@@ -34,6 +36,8 @@ type CreateEndpointRequest struct {
 	MinReplicas        int               `json:"minReplicas"`
 	MaxReplicas        int               `json:"maxReplicas"`
 	ScaleUpWaitSeconds int               `json:"scaleUpWaitSeconds"`
+	PublicHost         string            `json:"publicHost"`
+	EndpointMode       string            `json:"endpointMode"`
 	TargetPort         *int              `json:"targetPort"`
 	Command            string            `json:"command"`
 	Env                map[string]string `json:"env"`
@@ -257,9 +261,13 @@ func (s *Service) CreateEndpoint(ctx context.Context, req *CreateEndpointRequest
 		logicalImage = req.Image
 	}
 
+	endpointMode := strings.TrimSpace(req.EndpointMode)
+	if endpointMode == "" {
+		endpointMode = "http_service"
+	}
 	labels := map[string]string{
 		"external_endpoint_id": ext,
-		"endpoint_mode":        "http_service",
+		"endpoint_mode":        endpointMode,
 	}
 	if req.ProviderSkuID != "" {
 		labels["provider_sku_id"] = req.ProviderSkuID
@@ -331,13 +339,20 @@ func (s *Service) CreateEndpoint(ctx context.Context, req *CreateEndpointRequest
 		"gpu_type":             gpuType,
 		"billing_mode":         billing,
 		"logical_image":        logicalImage,
-		"endpoint_mode":        "http_service",
+		"endpoint_mode":        endpointMode,
+	}
+	if ph := strings.TrimSpace(req.PublicHost); ph != "" {
+		placementUpdates["public_host"] = ph
 	}
 	if len(req.RegionAllowlist) > 0 {
 		placementUpdates["region_allowlist"] = storemodel.JSONStringArray(req.RegionAllowlist)
 	}
 	if s.endpointRepo != nil {
 		_ = s.endpointRepo.UpdatePlacementFields(ctx, internalName, placementUpdates)
+	}
+
+	if gateway.GlobalRouteSync != nil {
+		_ = gateway.GlobalRouteSync.SyncEndpoint(ctx, internalName)
 	}
 
 	ep, err := s.endpointRepo.Get(ctx, internalName)
@@ -631,7 +646,7 @@ func (s *Service) buildRuntime(ctx context.Context, ep *mysql.Endpoint) (*Endpoi
 		BillingMode:        ep.BillingMode,
 		PlacementMode:      ep.PlacementMode,
 		RegionAllowlist:    allowlist,
-		PublicURL:          s.publicURL(ep.Endpoint),
+		PublicURL:          publicURLFromHost(ep.PublicHost, s.publicURL(ep.Endpoint)),
 	}, nil
 }
 
@@ -750,6 +765,21 @@ func (s *Service) publicURL(endpoint string) string {
 		return ""
 	}
 	return s.baseURL + "/v1/endpoints/" + endpoint
+}
+
+func publicURLFromHost(publicHost, fallback string) string {
+	host := strings.TrimSpace(publicHost)
+	if host == "" {
+		return fallback
+	}
+	domain := "rungpu.cn"
+	if config.GlobalConfig != nil {
+		domain = config.GlobalConfig.ResolvedGateway().PublicBaseDomain
+	}
+	if strings.Contains(host, ".") {
+		return "https://" + host
+	}
+	return "https://" + host + "." + domain
 }
 
 // PreviewPlacementDecision exposes placement selection for tests (auto mode, no providerSkuId).

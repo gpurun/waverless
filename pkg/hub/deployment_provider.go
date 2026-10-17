@@ -29,6 +29,14 @@ func NewDeploymentProvider(h *Hub) *DeploymentProvider {
 	return &DeploymentProvider{hub: h}
 }
 
+// Hub exposes the underlying ProviderHub (gateway route sync, ops).
+func (d *DeploymentProvider) Hub() *Hub {
+	if d == nil {
+		return nil
+	}
+	return d.hub
+}
+
 func (d *DeploymentProvider) Deploy(ctx context.Context, req *interfaces.DeployRequest) (*interfaces.DeployResponse, error) {
 	if d.hub == nil || req == nil {
 		return nil, fmt.Errorf("hub deploy: invalid state")

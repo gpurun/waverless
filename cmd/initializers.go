@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"waverless/app/handler"
@@ -13,6 +14,7 @@ import (
 	gongjisvc "waverless/internal/service/gongji"
 	controlsvc "waverless/internal/service/control"
 	"waverless/internal/service/lifecycle"
+	"waverless/pkg/gateway"
 	"waverless/pkg/placement"
 	"waverless/pkg/autoscaler"
 	"waverless/pkg/capacity"
@@ -131,6 +133,7 @@ func (app *Application) initServices() error {
 	if err := app.initGongji(); err != nil {
 		return err
 	}
+	app.initGateway()
 
 	// Initialize worker service (MySQL-based)
 	app.workerService = service.NewWorkerService(
@@ -815,6 +818,61 @@ func (app *Application) propagateCapacityFailureToWorkers(event interfaces.Capac
 
 	logger.InfoCtx(ctx, "propagateCapacityFailure: updated %d WAITING_NODE workers for spec %s with capacity failure info",
 		len(workers), specName)
+}
+
+func (app *Application) initGateway() {
+	if app.config == nil || app.mysqlRepo == nil {
+		return
+	}
+	gc := app.config.ResolvedGateway()
+	if !gc.Enabled {
+		return
+	}
+	pub := gateway.NewFilePublisher(gc.TraefikDynamicDir, "endpoints.yml")
+	gp := app.gongjiDeploymentProvider()
+	gateway.GlobalRouteSync = gateway.NewRouteSync(
+		app.mysqlRepo.Endpoint,
+		app.mysqlRepo.ProviderSlice,
+		gp,
+		gc,
+		pub,
+	)
+	interval := 15 * time.Second
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-app.ctx.Done():
+				return
+			case <-ticker.C:
+				app.syncGatewayRoutes()
+			}
+		}
+	}()
+	logger.InfoCtx(app.ctx, "Gateway Traefik publisher enabled dir=%s", gc.TraefikDynamicDir)
+}
+
+func (app *Application) syncGatewayRoutes() {
+	if gateway.GlobalRouteSync == nil || app.mysqlRepo == nil {
+		return
+	}
+	rows, err := app.mysqlRepo.Endpoint.List(app.ctx)
+	if err != nil {
+		return
+	}
+	for _, ep := range rows {
+		if ep == nil {
+			continue
+		}
+		if strings.ToLower(strings.TrimSpace(ep.EndpointMode)) == "queue_worker" {
+			continue
+		}
+		if strings.TrimSpace(ep.PublicHost) == "" {
+			continue
+		}
+		_ = gateway.GlobalRouteSync.SyncEndpoint(app.ctx, ep.Endpoint)
+	}
 }
 
 func (app *Application) gongjiDeploymentProvider() *gongji.GongjiDeploymentProvider {

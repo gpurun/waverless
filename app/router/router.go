@@ -108,6 +108,7 @@ func (r *Router) Setup(engine *gin.Engine) {
 	r.setupControlRoutes(engine) // Cloud control API (/control/v1/*)
 	r.setupHealthRoutes(engine) // Health check
 	r.setupGongjiRoutes(engine)
+	r.setupControlRoutes(engine)
 
 	// Swagger API documentation UI
 	engine.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))

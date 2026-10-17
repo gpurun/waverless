@@ -42,6 +42,9 @@ type Worker struct {
 	// Spot instance cost tracking fields
 	SpotPrice        *float64 `gorm:"column:spot_price;type:decimal(10,6)" json:"spotPrice,omitempty"`              // Spot price (USD/hour) at worker creation time
 	SpotInstanceType *string  `gorm:"column:spot_instance_type;type:varchar(64)" json:"spotInstanceType,omitempty"` // Spot instance type (e.g., "g4dn.xlarge")
+	BackendURL       string   `gorm:"column:backend_url;type:varchar(512);not null;default:''" json:"backendUrl,omitempty"`
+	ProviderID       string   `gorm:"column:provider_id;type:varchar(32);not null;default:''" json:"providerId,omitempty"`
+	SliceID          *int64   `gorm:"column:slice_id" json:"sliceId,omitempty"`
 }
 
 func (Worker) TableName() string {

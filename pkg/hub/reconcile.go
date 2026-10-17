@@ -64,7 +64,11 @@ func (d *DeploymentProvider) ReconcileSlices(ctx context.Context, endpoint strin
 	if err := d.syncSliceScales(ctx, endpoint, desiredReplicas); err != nil {
 		return err
 	}
-	_ = gateway.DefaultRegistry.SyncEndpointBackends(ctx, endpoint, nil)
+	if gateway.GlobalRouteSync != nil {
+		if err := gateway.GlobalRouteSync.SyncEndpoint(ctx, endpoint); err != nil {
+			logger.WarnCtx(ctx, "gateway route sync failed for %s: %v", endpoint, err)
+		}
+	}
 	return nil
 }
 

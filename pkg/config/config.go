@@ -30,6 +30,7 @@ type Config struct {
 	Novita           NovitaConfig           `yaml:"novita"`              // Novita serverless configuration
 	Gongji           GongjiConfig           `yaml:"gongji"`              // Gongji (共绩) OpenAPI provider
 	Placement        PlacementConfig        `yaml:"placement"`           // Auto provider selection (M1)
+	Gateway          GatewayConfig          `yaml:"gateway"`             // Traefik route publisher
 	ImageValidation  ImageValidationConfig  `yaml:"imageValidation"`     // Image validation configuration
 	ResourceReleaser ResourceReleaserConfig `yaml:"resourceReleaser"`    // Resource releaser configuration
 }

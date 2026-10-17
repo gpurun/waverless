@@ -44,6 +44,9 @@ type Endpoint struct {
 	RegionAllowlist     JSONStringArray `gorm:"column:region_allowlist;type:jsonb;not null;default:'[]'" json:"region_allowlist"`
 	EndpointMode        string     `gorm:"column:endpoint_mode;type:varchar(32);not null;default:http_service" json:"endpoint_mode"`
 	ExternalEndpointID  string     `gorm:"column:external_endpoint_id;type:varchar(255);not null;default:''" json:"external_endpoint_id"`
+	PublicHost          string     `gorm:"column:public_host;type:varchar(255);not null;default:''" json:"public_host"`
+	GatewayRouteVersion int64      `gorm:"column:gateway_route_version;not null;default:0" json:"gateway_route_version"`
+	GatewayStatus       string     `gorm:"column:gateway_status;type:varchar(32);not null;default:''" json:"gateway_status"`
 	ActiveSliceID       *int64     `gorm:"column:active_slice_id" json:"active_slice_id,omitempty"`
 	CreatedAt           time.Time  `gorm:"column:created_at;type:timestamptz(3);not null;default:CURRENT_TIMESTAMP(3);index:idx_created_at" json:"created_at"`
 	UpdatedAt           time.Time  `gorm:"column:updated_at;type:timestamptz(3);not null;default:CURRENT_TIMESTAMP(3)" json:"updated_at"`

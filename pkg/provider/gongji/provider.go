@@ -367,15 +367,18 @@ func (p *GongjiDeploymentProvider) ListWorkers(ctx context.Context, endpoint str
 	}
 	out := make([]*interfaces.PodInfo, 0, len(data.Results))
 	for _, pt := range data.Results {
+		backendURL := PointBackendURL(pt, defaultWorkerPort)
 		out = append(out, &interfaces.PodInfo{
 			Name:     pt.Name,
 			Phase:    pt.Status,
 			Status:   pt.Status,
+			IP:       backendURL,
 			WorkerID: strconv.FormatInt(pt.PointID, 10),
 			Labels: map[string]string{
 				"gongji_point_id": strconv.FormatInt(pt.PointID, 10),
 				"gongji_task_id":  strconv.FormatInt(taskID, 10),
 				"region":          pt.Region,
+				"backend_url":     backendURL,
 			},
 		})
 	}

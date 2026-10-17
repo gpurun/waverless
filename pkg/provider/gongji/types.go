@@ -145,6 +145,11 @@ type Point struct {
 	Status     string `json:"status"`
 	Region     string `json:"region"`
 	RegionName string `json:"region_name"`
+	AccessURL  string `json:"access_url,omitempty"`
+	URL        string `json:"url,omitempty"`
+	Domain     string `json:"domain,omitempty"`
+	ServiceURL string `json:"service_url,omitempty"`
+	RemoteURL  string `json:"remote_url,omitempty"`
 }
 
 // TaskListFilter is the query for GET /api/deployment/task/search.

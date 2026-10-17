@@ -92,6 +92,15 @@ providers:
   queue: "redis"       # redis
   metadata: "postgres" # postgres (required for persistent metadata)
 
+gateway:
+  enabled: false
+  # When set, waverless writes Traefik file-provider YAML (Host → Gongji backend URLs).
+  traefik_dynamic_dir: "/root/docker-hub/waverless/traefik/dynamic/generated"
+  public_base_domain: "rungpu.cn"
+  health_check_path: "/health/ready"
+  edge_auth_middleware: "serverless-edge-auth@file"
+  # Env overrides: GATEWAY_ENABLED=true, GATEWAY_TRAEFIK_DYNAMIC_DIR, SERVERLESS_PUBLIC_BASE_DOMAIN
+
 placement:
   strategy: greedy_cost
   image_not_ready_penalty: 1.0
