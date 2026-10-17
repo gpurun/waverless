@@ -3,6 +3,7 @@ package mysql
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -21,6 +22,25 @@ func NewEndpointRepository(ds *Datastore) *EndpointRepository {
 // Create creates a new endpoint
 func (r *EndpointRepository) Create(ctx context.Context, endpoint *Endpoint) error {
 	return r.ds.DB(ctx).Create(endpoint).Error
+}
+
+// GetByExternalEndpointID finds a non-deleted endpoint by Cloud external id.
+func (r *EndpointRepository) GetByExternalEndpointID(ctx context.Context, externalID string) (*Endpoint, error) {
+	externalID = strings.TrimSpace(externalID)
+	if externalID == "" {
+		return nil, nil
+	}
+	var endpoint Endpoint
+	err := r.ds.DB(ctx).
+		Where("external_endpoint_id = ? AND status != ?", externalID, "deleted").
+		First(&endpoint).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get endpoint by external id: %w", err)
+	}
+	return &endpoint, nil
 }
 
 // Get retrieves an endpoint by name

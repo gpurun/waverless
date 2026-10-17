@@ -99,10 +99,23 @@ func DefaultResourceReleaserConfig() ResourceReleaserConfig {
 
 // ServerConfig server configuration
 type ServerConfig struct {
-	Port    int    `yaml:"port"`
-	Mode    string `yaml:"mode"`     // debug, release
-	APIKey  string `yaml:"api_key"`  // API key for worker authentication (optional, if empty, auth is disabled)
-	BaseURL string `yaml:"base_url"` // Base URL for the server
+	Port          int    `yaml:"port"`
+	Mode          string `yaml:"mode"`            // debug, release
+	APIKey        string `yaml:"api_key"`         // API key for worker authentication (optional, if empty, auth is disabled)
+	ServiceAPIKey string `yaml:"service_api_key"` // Service-to-service key for /control/v1 (env: WAVERLESS_SERVICE_API_KEY)
+	BaseURL       string `yaml:"base_url"`        // Base URL for the server
+}
+
+// ControlServiceAPIKey returns the bearer token expected on /control/v1.
+// Prefers service_api_key; falls back to api_key when unset.
+func (c *Config) ControlServiceAPIKey() string {
+	if c == nil {
+		return ""
+	}
+	if k := strings.TrimSpace(c.Server.ServiceAPIKey); k != "" {
+		return k
+	}
+	return strings.TrimSpace(c.Server.APIKey)
 }
 
 // RedisConfig Redis configuration
@@ -524,6 +537,13 @@ func applyEnvOverrides(cfg *Config) {
 	}
 	if v := os.Getenv("GONGJI_REGION_STATE_FILE"); v != "" {
 		cfg.Gongji.RegionStateFile = v
+	}
+
+	if v := os.Getenv("WAVERLESS_SERVICE_API_KEY"); v != "" {
+		cfg.Server.ServiceAPIKey = v
+	}
+	if v := os.Getenv("WAVERLESS_SERVICE_SECRET"); v != "" && cfg.Server.ServiceAPIKey == "" {
+		cfg.Server.ServiceAPIKey = v
 	}
 	if v := os.Getenv("GONGJI_INVENTORY_FRESH_SECONDS"); v != "" {
 		if seconds, err := strconv.Atoi(v); err == nil && seconds > 0 {
