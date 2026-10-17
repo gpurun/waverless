@@ -17,41 +17,41 @@
 
 ```
 waverless/
-├── app/                      # Application layer
-│   ├── handler/             # HTTP handlers (thin)
-│   ├── middleware/          # Auth, logging, recovery
-│   └── router/              # Route definitions
-│
-├── cmd/                      # Entry points
-│   ├── main.go             # Application entry
-│   ├── initializers.go     # Dependency injection
-│   └── jobs.go             # Background jobs
-│
-├── internal/                 # Internal packages
-│   ├── service/            # Business logic
-│   │   ├── endpoint/       # Endpoint CRUD + deployment
-│   │   ├── lifecycle/      # Worker lifecycle
-│   │   ├── task_service.go
-│   │   └── worker_service.go
-│   ├── model/              # Domain models
-│   └── vo/                 # Value objects (DTOs)
-│
-├── pkg/                      # Shared packages
-│   ├── autoscaler/         # Autoscaling engine
-│   │   ├── manager.go      # Control loop
-│   │   ├── decision_engine.go
-│   │   ├── executor.go
-│   │   └── metrics_collector.go
-│   ├── provider/           # Deployment providers
-│   │   ├── k8s/           # Kubernetes
-│   │   ├── novita/        # Novita Serverless
-│   │   └── docker/        # Docker (dev)
-│   ├── interfaces/         # Shared interfaces
-│   └── store/              # Data access
-│       ├── mysql/         # MySQL repositories
-│       └── redis/         # Redis operations
-│
-└── config/                   # Config files
+鈹溾攢鈹€ app/                      # Application layer
+鈹?  鈹溾攢鈹€ handler/             # HTTP handlers (thin)
+鈹?  鈹溾攢鈹€ middleware/          # Auth, logging, recovery
+鈹?  鈹斺攢鈹€ router/              # Route definitions
+鈹?
+鈹溾攢鈹€ cmd/                      # Entry points
+鈹?  鈹溾攢鈹€ main.go             # Application entry
+鈹?  鈹溾攢鈹€ initializers.go     # Dependency injection
+鈹?  鈹斺攢鈹€ jobs.go             # Background jobs
+鈹?
+鈹溾攢鈹€ internal/                 # Internal packages
+鈹?  鈹溾攢鈹€ service/            # Business logic
+鈹?  鈹?  鈹溾攢鈹€ endpoint/       # Endpoint CRUD + deployment
+鈹?  鈹?  鈹溾攢鈹€ lifecycle/      # Worker lifecycle
+鈹?  鈹?  鈹溾攢鈹€ task_service.go
+鈹?  鈹?  鈹斺攢鈹€ worker_service.go
+鈹?  鈹溾攢鈹€ model/              # Domain models
+鈹?  鈹斺攢鈹€ vo/                 # Value objects (DTOs)
+鈹?
+鈹溾攢鈹€ pkg/                      # Shared packages
+鈹?  鈹溾攢鈹€ autoscaler/         # Autoscaling engine
+鈹?  鈹?  鈹溾攢鈹€ manager.go      # Control loop
+鈹?  鈹?  鈹溾攢鈹€ decision_engine.go
+鈹?  鈹?  鈹溾攢鈹€ executor.go
+鈹?  鈹?  鈹斺攢鈹€ metrics_collector.go
+鈹?  鈹溾攢鈹€ provider/           # Deployment providers
+鈹?  鈹?  鈹溾攢鈹€ k8s/           # Kubernetes
+鈹?  鈹?  鈹溾攢鈹€ novita/        # Novita Serverless
+鈹?  鈹?  鈹斺攢鈹€ docker/        # Docker (dev)
+鈹?  鈹溾攢鈹€ interfaces/         # Shared interfaces
+鈹?  鈹斺攢鈹€ store/              # Data access
+鈹?      鈹溾攢鈹€ postgres/         # SQL repositories (PostgreSQL/PostgreSQL dialects)
+鈹?      鈹斺攢鈹€ redis/         # Redis operations
+鈹?
+鈹斺攢鈹€ config/                   # Config files
 ```
 
 ### Layer Responsibilities
@@ -85,7 +85,7 @@ flowchart TB
 ```mermaid
 flowchart LR
     Handler --> Service
-    Service --> Store[(MySQL/Redis)]
+    Service --> Store[(PostgreSQL/Redis)]
     Service --> Provider
     Service --> OtherService
 ```
@@ -112,17 +112,17 @@ Prevents race conditions when workers are draining:
 ```mermaid
 sequenceDiagram
     Worker->>Service: PullJobs(worker_id)
-    Service->>MySQL: Check worker status
+    Service->>PostgreSQL: Check worker status
     
     alt DRAINING
         Service-->>Worker: Empty
     else ONLINE
         Service->>Redis: RPOP task
-        Service->>MySQL: Update IN_PROGRESS
-        Service->>MySQL: Re-check status
+        Service->>PostgreSQL: Update IN_PROGRESS
+        Service->>PostgreSQL: Re-check status
         
         alt Became DRAINING
-            Service->>MySQL: Revert PENDING
+            Service->>PostgreSQL: Revert PENDING
             Service->>Redis: LPUSH back
             Service-->>Worker: Empty
         else Still ONLINE
@@ -148,7 +148,7 @@ Task selection uses database-level locking to prevent race conditions:
 sequenceDiagram
     K8s->>Informer: SIGTERM
     Informer->>Lifecycle: OnWorkerDraining
-    Lifecycle->>MySQL: Set DRAINING
+    Lifecycle->>PostgreSQL: Set DRAINING
     
     loop Until done
         Worker->>Worker: Complete tasks
@@ -156,7 +156,7 @@ sequenceDiagram
 
     K8s->>Informer: Pod Deleted
     Informer->>Lifecycle: OnWorkerDelete
-    Lifecycle->>MySQL: Set OFFLINE
+    Lifecycle->>PostgreSQL: Set OFFLINE
 ```
 
 ### Rolling Update Optimization

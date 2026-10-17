@@ -113,12 +113,21 @@ func NewDatastore(dsn string, proxyConfig *config.ProxyConfig) (*Datastore, erro
 }
 
 // NewPostgresDatastore creates a new PostgreSQL datastore.
-// Note: the SOCKS5/HTTP proxy option is MySQL-specific and is not applied to PostgreSQL.
+// PostgreSQL connections use the native pgx transport and do not apply MySQL proxy configuration.
 func NewPostgresDatastore(dsn string, proxyConfig *config.ProxyConfig) (*Datastore, error) {
-	if proxyConfig != nil && proxyConfig.Enabled {
-		log.Printf("PostgreSQL proxy configuration is not supported and will be ignored")
+	ds, err := openWithDialector(postgres.Open(dsn), DialectPostgres)
+	if err != nil {
+		return nil, err
 	}
-	return openWithDialector(postgres.Open(dsn), DialectPostgres)
+	sqlDB, err := ds.db.DB()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get PostgreSQL database handle: %w", err)
+	}
+	if err := sqlDB.Ping(); err != nil {
+		_ = sqlDB.Close()
+		return nil, fmt.Errorf("failed to ping PostgreSQL database: %w", err)
+	}
+	return ds, nil
 }
 
 // dialWithProxy creates a connection through proxy

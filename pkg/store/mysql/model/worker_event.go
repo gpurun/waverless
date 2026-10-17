@@ -20,11 +20,11 @@ type WorkerEvent struct {
 	WorkerID            string    `gorm:"column:worker_id;type:varchar(255);not null;index:idx_worker_event_time,priority:1"`
 	Endpoint            string    `gorm:"column:endpoint;type:varchar(255);not null;index:idx_endpoint_event_time,priority:1"`
 	EventType           string    `gorm:"column:event_type;type:varchar(50);not null;index:idx_event_type_time,priority:1"`
-	EventTime           time.Time `gorm:"column:event_time;type:datetime(3);not null;index:idx_worker_event_time,priority:2;index:idx_endpoint_event_time,priority:2;index:idx_event_type_time,priority:2;index:idx_event_time"`
+	EventTime           time.Time `gorm:"column:event_time;type:timestamptz(3);not null;index:idx_worker_event_time,priority:2;index:idx_endpoint_event_time,priority:2;index:idx_event_type_time,priority:2;index:idx_event_time"`
 	ColdStartDurationMs *int64    `gorm:"column:cold_start_duration_ms"`
 	IdleDurationMs      *int64    `gorm:"column:idle_duration_ms"`
 	TaskID              string    `gorm:"column:task_id;type:varchar(255)"`
-	Metadata            JSONMap   `gorm:"column:metadata;type:json"`
+	Metadata            JSONMap   `gorm:"column:metadata;type:jsonb"`
 }
 
 func (WorkerEvent) TableName() string { return "worker_events" }

@@ -6,10 +6,10 @@
   <h1>Waverless</h1>
   <p><strong>High-performance Serverless GPU Task Orchestration System</strong></p>
   <p>
-    <a href="https://wavespeed.ai">🌐 wavespeed.ai</a> •
-    <a href="docs/ARCHITECTURE.md">📐 Architecture</a> •
-    <a href="docs/USER_GUIDE.md">📖 User Guide</a> •
-    <a href="docs/DEVELOPER_GUIDE.md">🔧 Developer Guide</a>
+    <a href="https://wavespeed.ai">馃寪 wavespeed.ai</a> 鈥?
+    <a href="docs/ARCHITECTURE.md">馃搻 Architecture</a> 鈥?
+    <a href="docs/USER_GUIDE.md">馃摉 User Guide</a> 鈥?
+    <a href="docs/DEVELOPER_GUIDE.md">馃敡 Developer Guide</a>
   </p>
 </div>
 
@@ -17,11 +17,11 @@
 
 ## Features
 
-- 🚀 **Pull-based Architecture** - Workers actively pull tasks for better load balancing
-- 🔌 **RunPod Compatible** - Zero-code migration from runpod-python SDK
-- ☸️ **Multi-Provider** - Kubernetes, Novita Serverless, Docker backends
-- 📊 **Smart Autoscaling** - Queue-depth, priority, and resource-aware scaling
-- 🛡️ **Graceful Shutdown** - Zero task loss during rolling updates
+- 馃殌 **Pull-based Architecture** - Workers actively pull tasks for better load balancing
+- 馃攲 **RunPod Compatible** - Zero-code migration from runpod-python SDK
+- 鈽革笍 **Multi-Provider** - Kubernetes, Novita Serverless, Docker backends
+- 馃搳 **Smart Autoscaling** - Queue-depth, priority, and resource-aware scaling
+- 馃洝锔?**Graceful Shutdown** - Zero task loss during rolling updates
 
 ## Architecture
 
@@ -38,7 +38,7 @@ flowchart TB
         Queue[Task Queue]
         WM[Worker Mgmt]
         Autoscaler[Autoscaler]
-        Store[(Redis + MySQL)]
+        Store[(Redis + PostgreSQL)]
     end
 
     subgraph Provider
@@ -70,9 +70,12 @@ flowchart TB
 
 ```bash
 # Local development
-docker-compose up -d mysql redis
+docker compose up -d postgres redis
 cp config/config.example.yaml config/config.yaml
 go run cmd/main.go
+
+# Run the complete test suite with Go 1.25 and the PostgreSQL integration test
+docker compose --profile test run --rm test
 
 # Kubernetes deployment
 ./deploy.sh install
@@ -104,5 +107,5 @@ MIT License
 
 ---
 
-**[WaveSpeed AI](https://wavespeed.ai/)** — AI image & video generation platform.
-Try it in the browser: **[Image generator](https://wavespeed.ai/image-generator)** · **[Video generator](https://wavespeed.ai/video-generator)**
+**[WaveSpeed AI](https://wavespeed.ai/)** 鈥?AI image & video generation platform.
+Try it in the browser: **[Image generator](https://wavespeed.ai/image-generator)** 路 **[Video generator](https://wavespeed.ai/video-generator)**

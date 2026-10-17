@@ -1,40 +1,41 @@
 # Waverless Database Deployment
 
-This document describes the MySQL database deployment included with Waverless.
+This document describes PostgreSQL metadata storage for Waverless. Redis remains
+the queue, heartbeat, cache, and distributed-lock store.
 
 ## Overview
 
-Waverless includes a MySQL 8.0 deployment for production use, automatically configured and initialized with all required tables.
+Waverless uses PostgreSQL 17 for persistent metadata, initialized from the canonical
+`scripts/init_postgres.sql` schema. Production deployments should use a persistent
+volume and manage credentials through Kubernetes Secrets.
 
 ## Architecture
 
 ```
-┌─────────────────┐
-│  Waverless App  │
-└────────┬────────┘
-         │
-    ┌────┴────┬──────────────┐
-    │         │              │
-┌───▼────┐ ┌──▼──────┐ ┌────▼────┐
-│ Redis  │ │  MySQL  │ │   K8s   │
-│ Cache  │ │Database │ │ Cluster │
-└────────┘ └─────────┘ └─────────┘
+鈹屸攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+鈹? Waverless App  鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+         鈹?
+    鈹屸攢鈹€鈹€鈹€鈹粹攢鈹€鈹€鈹€鈹攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
+    鈹?        鈹?             鈹?
+鈹屸攢鈹€鈹€鈻尖攢鈹€鈹€鈹€鈹?鈹屸攢鈹€鈻尖攢鈹€鈹€鈹€鈹€鈹€鈹?鈹屸攢鈹€鈹€鈹€鈻尖攢鈹€鈹€鈹€鈹?
+鈹?Redis  鈹?鈹侾ostgreSQL鈹?鈹?  K8s   鈹?鈹?Cache  鈹?鈹侱atabase 鈹?鈹?Cluster 鈹?
+鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?鈹斺攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?
 ```
 
 ## Default Configuration
 
-**Service**: `waverless-mysql-svc` (ClusterIP)
-**Port**: 3306
+**Service**: `waverless-postgres-svc` (ClusterIP)
+**Port**: 5432
 **Database**: `waverless`
 
 **Credentials**:
-- Root Password: `waverless_root_pass`
-- User: `waverless`
-- Password: `waverless_pass`
+- User: `wavespeed`
+- Password: configure with a Kubernetes Secret for non-development deployments
 
 ## Database Schema
 
-The MySQL deployment includes automatic initialization with the following tables:
+The PostgreSQL deployment automatically initializes all 15 metadata tables:
 
 ### Core Tables
 
@@ -50,16 +51,18 @@ The MySQL deployment includes automatic initialization with the following tables
 ### Statistics & Monitoring
 
 6. **task_statistics** - Pre-aggregated task statistics (global/per-endpoint)
-7. **gpu_usage_records** - Task-level GPU usage records
-8. **gpu_usage_statistics_minute** - Minute-level GPU aggregation
-9. **gpu_usage_statistics_hourly** - Hourly GPU aggregation
-10. **gpu_usage_statistics_daily** - Daily GPU aggregation
+7. **worker_events** - Worker lifecycle and idle tracking
+8. **worker_resource_snapshots** - GPU/CPU utilization snapshots
+9. **endpoint_minute_stats** - Minute-level endpoint aggregation
+10. **endpoint_hourly_stats** - Hourly endpoint aggregation
+11. **endpoint_daily_stats** - Daily endpoint aggregation
+12. **status_events** - Worker status and pending-phase history
 
 ## Deployment
 
 ### Automatic Deployment
 
-The MySQL database is automatically deployed when using the deployment script:
+The PostgreSQL database is automatically deployed when using the deployment script:
 
 ```bash
 ./deploy.sh install
@@ -69,8 +72,8 @@ Deployment sequence:
 1. Namespace creation
 2. RBAC setup
 3. ConfigMap creation
-4. **Redis deployment** ← Cache layer
-5. **MySQL deployment** ← Database layer
+4. **Redis deployment** 鈫?Cache layer
+5. **PostgreSQL deployment** 鈫?Metadata database
 6. Waverless API server
 7. Web UI
 
@@ -79,19 +82,21 @@ Deployment sequence:
 If deploying manually:
 
 ```bash
-# Apply MySQL deployment
-kubectl apply -f k8s/mysql-deployment.yaml
+# Create schema ConfigMap and apply PostgreSQL deployment
+kubectl create configmap waverless-postgres-init \
+  --from-file=init_postgres.sql=scripts/init_postgres.sql -n wavespeed
+kubectl apply -f k8s/postgres-deployment.yaml
 
-# Wait for MySQL to be ready
-kubectl wait --for=condition=ready pod -l app=waverless-mysql -n wavespeed --timeout=180s
+# Wait for PostgreSQL to be ready
+kubectl wait --for=condition=ready pod -l app=waverless-postgres -n wavespeed --timeout=180s
 
-# Verify MySQL is running
-kubectl get pods -n wavespeed -l app=waverless-mysql
+# Verify PostgreSQL is running
+kubectl get pods -n wavespeed -l app=waverless-postgres
 ```
 
 ## Database Initialization
 
-The database is automatically initialized on first startup via ConfigMap containing `init.sql`:
+The database is initialized on first startup from `scripts/init_postgres.sql`:
 
 - Creates all required tables
 - Sets up indexes for optimal performance
@@ -109,8 +114,7 @@ The database is automatically initialized on first startup via ConfigMap contain
 
 ## Storage
 
-**Current**: EmptyDir (ephemeral)
-**Production Recommendation**: Use PersistentVolumeClaim
+The PostgreSQL StatefulSet provisions a 20Gi PersistentVolumeClaim by default.
 
 ### Upgrading to Persistent Storage
 
@@ -120,7 +124,7 @@ The database is automatically initialized on first startup via ConfigMap contain
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: mysql-pvc
+  name: postgres-pvc
   namespace: wavespeed
 spec:
   accessModes:
@@ -131,43 +135,43 @@ spec:
   storageClassName: your-storage-class
 ```
 
-2. Update `k8s/mysql-deployment.yaml`:
+2. Update `k8s/postgres-deployment.yaml`:
 
 ```yaml
 volumes:
-- name: mysql-data
+- name: postgres-data
   persistentVolumeClaim:
-    claimName: mysql-pvc
+    claimName: postgres-pvc
 ```
 
 ## Health Checks
 
-**Liveness Probe**: `mysqladmin ping` every 10 seconds (starts after 30s)
-**Readiness Probe**: `mysqladmin ping` every 5 seconds (starts after 10s)
+**Liveness Probe**: `pg_isready -U wavespeed -d waverless` every 10 seconds
+**Readiness Probe**: `pg_isready -U wavespeed -d waverless` every 5 seconds
 
 ## Accessing the Database
 
 ### From within the cluster
 
 ```bash
-mysql -h waverless-mysql-svc -u waverless -pwaverless_pass waverless
+psql -h waverless-postgres-svc -U wavespeed -d waverless
 ```
 
 ### Using kubectl port-forward
 
 ```bash
 # Port forward to localhost
-kubectl port-forward -n wavespeed svc/waverless-mysql-svc 3306:3306
+kubectl port-forward -n wavespeed svc/waverless-postgres-svc 5432:5432
 
 # Connect from local machine
-mysql -h 127.0.0.1 -u waverless -pwaverless_pass waverless
+psql -h 127.0.0.1 -U wavespeed -d waverless
 ```
 
 ### From a debug pod
 
 ```bash
-kubectl run -it --rm debug --image=mysql:8.0 --restart=Never -n wavespeed -- \
-  mysql -h waverless-mysql-svc -u waverless -pwaverless_pass waverless
+kubectl run -it --rm debug --image=postgres:17 --restart=Never -n wavespeed -- \
+  psql -h waverless-postgres-svc -U wavespeed -d waverless
 ```
 
 ## Backup & Restore
@@ -176,43 +180,41 @@ kubectl run -it --rm debug --image=mysql:8.0 --restart=Never -n wavespeed -- \
 
 ```bash
 # Export database to file
-kubectl exec -n wavespeed deployment/waverless-mysql -- \
-  mysqldump -u waverless -pwaverless_pass waverless > backup.sql
+kubectl exec -n wavespeed statefulset/waverless-postgres -- \
+  pg_dump -U wavespeed -d waverless > backup.sql
 ```
 
 ### Restore
 
 ```bash
 # Import from backup file
-kubectl exec -i -n wavespeed deployment/waverless-mysql -- \
-  mysql -u waverless -pwaverless_pass waverless < backup.sql
+kubectl exec -i -n wavespeed statefulset/waverless-postgres -- \
+  psql -U wavespeed -d waverless < backup.sql
 ```
 
 ## Monitoring
 
-### Check MySQL status
+### Check PostgreSQL status
 
 ```bash
 # View logs
-kubectl logs -n wavespeed -l app=waverless-mysql -f
+kubectl logs -n wavespeed -l app=waverless-postgres -f
 
 # Check resource usage
-kubectl top pod -n wavespeed -l app=waverless-mysql
+kubectl top pod -n wavespeed -l app=waverless-postgres
 
 # View pod details
-kubectl describe pod -n wavespeed -l app=waverless-mysql
+kubectl describe pod -n wavespeed -l app=waverless-postgres
 ```
 
 ### Query statistics
 
 ```sql
 -- Check table sizes
-SELECT
-    table_name,
-    ROUND(((data_length + index_length) / 1024 / 1024), 2) AS size_mb
-FROM information_schema.tables
-WHERE table_schema = 'waverless'
-ORDER BY (data_length + index_length) DESC;
+SELECT relname AS table_name,
+       pg_size_pretty(pg_total_relation_size(quote_ident(relname))) AS total_size
+FROM pg_stat_user_tables
+ORDER BY pg_total_relation_size(quote_ident(relname)) DESC;
 
 -- View recent tasks
 SELECT task_id, endpoint, status, created_at, completed_at
@@ -223,30 +225,26 @@ LIMIT 10;
 -- Check global statistics
 SELECT * FROM task_statistics WHERE scope_type = 'global';
 
--- View GPU usage summary
-SELECT
-    DATE(completed_at) as date,
-    endpoint,
-    COUNT(*) as task_count,
-    SUM(gpu_hours) as total_gpu_hours
-FROM gpu_usage_records
-GROUP BY DATE(completed_at), endpoint
-ORDER BY date DESC, total_gpu_hours DESC;
+-- View task totals by endpoint
+SELECT endpoint, status, COUNT(*) AS task_count
+FROM tasks
+GROUP BY endpoint, status
+ORDER BY endpoint, status;
 ```
 
 ## Troubleshooting
 
-### MySQL pod not starting
+### PostgreSQL pod not starting
 
 ```bash
 # Check pod status
-kubectl get pods -n wavespeed -l app=waverless-mysql
+kubectl get pods -n wavespeed -l app=waverless-postgres
 
 # View events
-kubectl describe pod -n wavespeed -l app=waverless-mysql
+kubectl describe pod -n wavespeed -l app=waverless-postgres
 
 # Check logs
-kubectl logs -n wavespeed -l app=waverless-mysql
+kubectl logs -n wavespeed -l app=waverless-postgres
 ```
 
 ### Connection issues
@@ -254,26 +252,26 @@ kubectl logs -n wavespeed -l app=waverless-mysql
 ```bash
 # Test connectivity from Waverless pod
 kubectl exec -it -n wavespeed deployment/waverless -- \
-  nc -zv waverless-mysql-svc 3306
+  nc -zv waverless-postgres-svc 5432
 
 # Verify service
-kubectl get svc -n wavespeed waverless-mysql-svc
+kubectl get svc -n wavespeed waverless-postgres-svc
 ```
 
 ### Reset database
 
 ```bash
-# Delete MySQL pod (will recreate with fresh database)
-kubectl delete pod -n wavespeed -l app=waverless-mysql
+# Delete the PostgreSQL pod (StatefulSet recreates it using its persistent volume)
+kubectl delete pod -n wavespeed -l app=waverless-postgres
 
 # Or delete entire deployment
-kubectl delete -f k8s/mysql-deployment.yaml
-kubectl apply -f k8s/mysql-deployment.yaml
+kubectl delete -f k8s/postgres-deployment.yaml
+kubectl apply -f k8s/postgres-deployment.yaml
 ```
 
 ## Security Considerations
 
-⚠️ **Important**: The default credentials are for development/testing only!
+鈿狅笍 **Important**: The default credentials are for development/testing only!
 
 ### For Production:
 
@@ -283,12 +281,11 @@ kubectl apply -f k8s/mysql-deployment.yaml
 apiVersion: v1
 kind: Secret
 metadata:
-  name: mysql-secret
+  name: postgres-secret
   namespace: wavespeed
 type: Opaque
 stringData:
-  root-password: <strong-random-password>
-  user: waverless
+  user: wavespeed
   password: <strong-random-password>
 ```
 
@@ -296,15 +293,10 @@ stringData:
 
 ```yaml
 env:
-- name: MYSQL_ROOT_PASSWORD
+- name: POSTGRES_PASSWORD
   valueFrom:
     secretKeyRef:
-      name: mysql-secret
-      key: root-password
-- name: MYSQL_PASSWORD
-  valueFrom:
-    secretKeyRef:
-      name: mysql-secret
+      name: postgres-secret
       key: password
 ```
 
@@ -313,26 +305,13 @@ env:
 5. **Enable audit logging** for compliance
 6. **Regular backups** to persistent storage
 
-## Migration from External Database
+## Using a Managed PostgreSQL Service
 
-If you have an existing external MySQL database:
-
-1. Export data from old database
-2. Update ConfigMap to point to external database
-3. Remove or skip MySQL deployment
-4. Import data to external database
-
-```yaml
-# config.yaml in ConfigMap
-mysql:
-  host: external-mysql.example.com
-  port: 3306
-  user: waverless
-  password: <external-password>
-  database: waverless
-```
+Point `postgres.host`, `postgres.port`, and the associated secret-backed
+credentials at the managed service, set `providers.metadata: postgres`, and do
+not apply `k8s/postgres-deployment.yaml`. Apply `scripts/init_postgres.sql` to
+the database before starting Waverless.
 
 ---
 
-**Last Updated**: 2025-11-14
-**Version**: 1.0
+**Last Updated**: 2026-10-17

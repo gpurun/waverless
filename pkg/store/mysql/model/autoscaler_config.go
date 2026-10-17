@@ -2,7 +2,7 @@ package model
 
 import "time"
 
-// AutoscalerConfig MySQL model for autoscaler_configs table
+// AutoscalerConfig database model for autoscaler_configs.
 type AutoscalerConfig struct {
 	ID                int64  `gorm:"primaryKey;autoIncrement" json:"id"`
 	Endpoint          string `gorm:"column:endpoint;type:varchar(255);not null;uniqueIndex:idx_endpoint_unique" json:"endpoint"`
@@ -24,13 +24,13 @@ type AutoscalerConfig struct {
 	// nil/"" = follow global setting (default)
 	// "disabled" = force disable autoscaling for this endpoint
 	// "enabled" = force enable autoscaling for this endpoint
-	AutoscalerEnabled *string   `gorm:"column:autoscaler_enabled;type:varchar(20)" json:"autoscaler_enabled,omitempty"`
+	AutoscalerEnabled *string `gorm:"column:autoscaler_enabled;type:varchar(20)" json:"autoscaler_enabled,omitempty"`
 	// Time tracking fields (for autoscaler decisions)
-	LastTaskTime     *time.Time `gorm:"column:last_task_time;type:datetime(3)" json:"last_task_time,omitempty"`     // Last task completion time (for idle time calculation)
-	LastScaleTime    *time.Time `gorm:"column:last_scale_time;type:datetime(3)" json:"last_scale_time,omitempty"`   // Last scaling time (for cooldown)
-	FirstPendingTime *time.Time `gorm:"column:first_pending_time;type:datetime(3)" json:"first_pending_time,omitempty"` // First pending task time (for starvation prevention)
-	CreatedAt         time.Time `gorm:"column:created_at;type:datetime(3);not null;default:CURRENT_TIMESTAMP(3)" json:"created_at"`
-	UpdatedAt         time.Time `gorm:"column:updated_at;type:datetime(3);not null;default:CURRENT_TIMESTAMP(3)" json:"updated_at"`
+	LastTaskTime     *time.Time `gorm:"column:last_task_time;type:timestamptz(3)" json:"last_task_time,omitempty"`         // Last task completion time (for idle time calculation)
+	LastScaleTime    *time.Time `gorm:"column:last_scale_time;type:timestamptz(3)" json:"last_scale_time,omitempty"`       // Last scaling time (for cooldown)
+	FirstPendingTime *time.Time `gorm:"column:first_pending_time;type:timestamptz(3)" json:"first_pending_time,omitempty"` // Last pending task time (for starvation prevention)
+	CreatedAt        time.Time  `gorm:"column:created_at;type:timestamptz(3);not null;default:CURRENT_TIMESTAMP(3)" json:"created_at"`
+	UpdatedAt        time.Time  `gorm:"column:updated_at;type:timestamptz(3);not null;default:CURRENT_TIMESTAMP(3)" json:"updated_at"`
 }
 
 // TableName specifies the table name for AutoscalerConfig

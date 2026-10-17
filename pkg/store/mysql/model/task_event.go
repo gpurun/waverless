@@ -33,7 +33,7 @@ type TaskEvent struct {
 	TaskID              string    `gorm:"column:task_id;type:varchar(255);not null;index:idx_task_id_event_time,priority:1" json:"task_id"`
 	Endpoint            string    `gorm:"column:endpoint;type:varchar(255);not null;index:idx_endpoint_event_time,priority:1" json:"endpoint"`
 	EventType           string    `gorm:"column:event_type;type:varchar(50);not null;index:idx_event_type" json:"event_type"`
-	EventTime           time.Time `gorm:"column:event_time;type:datetime(3);not null;default:CURRENT_TIMESTAMP(3);index:idx_task_id_event_time,priority:2;index:idx_endpoint_event_time,priority:2;index:idx_event_time" json:"event_time"`
+	EventTime           time.Time `gorm:"column:event_time;type:timestamptz(3);not null;default:CURRENT_TIMESTAMP(3);index:idx_task_id_event_time,priority:2;index:idx_endpoint_event_time,priority:2;index:idx_event_time" json:"event_time"`
 	WorkerID            string    `gorm:"column:worker_id;type:varchar(255);index:idx_worker_id" json:"worker_id"`
 	WorkerPodName       string    `gorm:"column:worker_pod_name;type:varchar(255)" json:"worker_pod_name"`
 	FromStatus          string    `gorm:"column:from_status;type:varchar(50)" json:"from_status"`
@@ -41,7 +41,7 @@ type TaskEvent struct {
 	ErrorMessage        string    `gorm:"column:error_message;type:text" json:"error_message"`
 	ErrorType           string    `gorm:"column:error_type;type:varchar(100)" json:"error_type"`
 	RetryCount          int       `gorm:"column:retry_count;type:int;default:0" json:"retry_count"`
-	Metadata            JSONMap   `gorm:"column:metadata;type:json" json:"metadata"`
+	Metadata            JSONMap   `gorm:"column:metadata;type:jsonb" json:"metadata"`
 	QueueWaitMs         *int      `gorm:"column:queue_wait_ms" json:"queue_wait_ms"`
 	ExecutionDurationMs *int      `gorm:"column:execution_duration_ms" json:"execution_duration_ms"`
 	TotalDurationMs     *int      `gorm:"column:total_duration_ms" json:"total_duration_ms"`

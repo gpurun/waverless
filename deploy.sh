@@ -133,13 +133,19 @@ install() {
     log_info "Waiting for Redis..."
     kubectl wait --for=condition=ready pod -l app=waverless-redis -n "${NAMESPACE}" --timeout=120s || true
 
-    # Deploy MySQL
-    log_info "Deploying MySQL..."
-    apply_yaml "k8s/mysql-deployment.yaml"
+    # Create PostgreSQL schema ConfigMap from the canonical SQL source.
+    kubectl create configmap waverless-postgres-init \
+        --from-file=init_postgres.sql="scripts/init_postgres.sql" \
+        --namespace="${NAMESPACE}" \
+        --dry-run=client -o yaml | kubectl apply -f -
 
-    # Wait for MySQL to be ready
-    log_info "Waiting for MySQL..."
-    kubectl wait --for=condition=ready pod -l app=waverless-mysql -n "${NAMESPACE}" --timeout=180s || true
+    # Deploy PostgreSQL
+    log_info "Deploying PostgreSQL..."
+    apply_yaml "k8s/postgres-deployment.yaml"
+
+    # Wait for PostgreSQL to be ready
+    log_info "Waiting for PostgreSQL..."
+    kubectl wait --for=condition=ready pod -l app=waverless-postgres -n "${NAMESPACE}" --timeout=180s
 
     # Deploy Waverless
     log_info "Deploying Waverless..."

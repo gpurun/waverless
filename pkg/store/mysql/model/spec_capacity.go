@@ -14,7 +14,7 @@ const (
 	CapacitySoldOut   CapacityStatus = "sold_out"
 )
 
-// SpecCapacity spec capacity status table
+// SpecCapacity models a resource specification's capacity status.
 type SpecCapacity struct {
 	ID       int64          `gorm:"primaryKey;autoIncrement" json:"id"`
 	SpecName string         `gorm:"column:spec_name;type:varchar(100);not null;uniqueIndex:idx_spec_name" json:"spec_name"`
@@ -32,10 +32,10 @@ type SpecCapacity struct {
 	InstanceType string           `gorm:"column:instance_type;type:varchar(50)" json:"instance_type"`
 
 	// Timestamps
-	LastSuccessAt   *time.Time `gorm:"column:last_success_at;type:datetime(3)" json:"last_success_at"`
-	LastFailureAt   *time.Time `gorm:"column:last_failure_at;type:datetime(3)" json:"last_failure_at"`
-	LastSpotCheckAt *time.Time `gorm:"column:last_spot_check_at;type:datetime(3)" json:"last_spot_check_at"`
-	UpdatedAt       time.Time  `gorm:"column:updated_at;type:datetime(3);not null;autoUpdateTime" json:"updated_at"`
+	LastSuccessAt   *time.Time `gorm:"column:last_success_at;type:timestamptz(3)" json:"last_success_at"`
+	LastFailureAt   *time.Time `gorm:"column:last_failure_at;type:timestamptz(3)" json:"last_failure_at"`
+	LastSpotCheckAt *time.Time `gorm:"column:last_spot_check_at;type:timestamptz(3)" json:"last_spot_check_at"`
+	UpdatedAt       time.Time  `gorm:"column:updated_at;type:timestamptz(3);not null;autoUpdateTime" json:"updated_at"`
 }
 
 func (SpecCapacity) TableName() string {

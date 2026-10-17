@@ -72,7 +72,7 @@ Access http://localhost:3000 (default: admin/admin)
 ```bash
 # Start dependencies
 docker run -d -p 6379:6379 redis:7-alpine
-docker run -d -p 3306:3306 -e MYSQL_ROOT_PASSWORD=password -e MYSQL_DATABASE=waverless mysql:8.0
+docker run -d -p 3306:3306 -e MYSQL_ROOT_PASSWORD=password -e MYSQL_DATABASE=waverless postgres:8.0
 
 # Build and run
 make build
@@ -105,7 +105,7 @@ server:
   port: 8080
   mode: release  # debug, release
 
-mysql:
+postgres:
   host: localhost
   port: 3306
   user: root
@@ -165,7 +165,10 @@ specs:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `MYSQL_DSN` | MySQL connection | - |
+| `METADATA_PROVIDER` | Metadata database; use `postgres` | `postgres` |
+| `PG_HOST` / `PG_PORT` | PostgreSQL connection host / port | `127.0.0.1` / `5432` |
+| `PG_USER` / `PG_PASSWORD` / `PG_DATABASE` | PostgreSQL credentials and database | `wavespeed` / configured password / `waverless` |
+| `PG_SSLMODE` / `PG_TIMEZONE` | PostgreSQL TLS mode / session timezone | `disable` / `UTC` |
 | `REDIS_ADDR` | Redis address | localhost:6379 |
 | `K8S_NAMESPACE` | K8s namespace | default |
 | `K8S_PLATFORM` | Platform type | generic |
@@ -296,9 +299,9 @@ Intelligent scaling based on queue depth, priority, and resource constraints.
 
 | Parameter | Description | Default | Recommended |
 |-----------|-------------|---------|-------------|
-| `minReplicas` | Minimum replicas | 0 | Critical: ≥2, Normal: 1 |
+| `minReplicas` | Minimum replicas | 0 | Critical: 鈮?, Normal: 1 |
 | `maxReplicas` | Maximum replicas | - | Based on capacity |
-| `scaleUpThreshold` | Queue depth to scale up | 1 | Critical: 1, Batch: ≥5 |
+| `scaleUpThreshold` | Queue depth to scale up | 1 | Critical: 1, Batch: 鈮? |
 | `scaleDownIdleTime` | Idle seconds before scale down | 300 | 180-600 |
 | `scaleUpCooldown` | Scale up cooldown (s) | 30 | 30-60 |
 | `scaleDownCooldown` | Scale down cooldown (s) | 60 | 60-180 |
@@ -433,7 +436,7 @@ Verify:
 
 ### Task Timeout
 
-- Check global timeout in `config.yaml` → `queue.task_timeout`
+- Check global timeout in `config.yaml` 鈫?`queue.task_timeout`
 - Check per-endpoint `taskTimeout` setting
 - Increase timeout if tasks legitimately need more time
 

@@ -14,14 +14,14 @@ data:
       password: ""
       db: 0
 
-    mysql:
-      host: waverless-mysql-svc
-      port: 3306
-      user: waverless
-      password: waverless_pass
+    postgres:
+      host: waverless-postgres-svc
+      port: 5432
+      user: wavespeed
+      password: wavespeed
       database: waverless
-      max_open_conns: 100
-      max_idle_conns: 10
+      sslmode: disable
+      timezone: UTC
 
     queue:
       concurrency: 10
@@ -53,6 +53,11 @@ data:
       max_cpu_cores: 128
       max_memory_gb: 512
       starvation_time: 300
+
+    providers:
+      deployment: k8s
+      queue: redis
+      metadata: postgres
 
   # Note: specs.yaml and deployment.yaml template are also needed
   # When using deploy.sh, these files are automatically included via:

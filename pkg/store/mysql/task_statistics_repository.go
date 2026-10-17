@@ -8,7 +8,7 @@ import (
 	"waverless/pkg/store/mysql/model"
 )
 
-// TaskStatisticsRepository handles task statistics persistence in MySQL
+// TaskStatisticsRepository handles task statistics persistence.
 type TaskStatisticsRepository struct {
 	ds *Datastore
 }

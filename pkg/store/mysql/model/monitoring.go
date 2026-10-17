@@ -6,7 +6,7 @@ import "time"
 type EndpointMinuteStat struct {
 	ID                   int64     `gorm:"primaryKey;autoIncrement"`
 	Endpoint             string    `gorm:"size:255;not null;uniqueIndex:uk_endpoint_minute,priority:1"`
-	StatMinute           time.Time `gorm:"not null;uniqueIndex:uk_endpoint_minute,priority:2;index:idx_stat_minute"`
+	StatMinute           time.Time `gorm:"type:timestamptz(3);not null;uniqueIndex:uk_endpoint_minute,priority:2;index:idx_stat_minute"`
 	ActiveWorkers        int       `gorm:"default:0"`
 	IdleWorkers          int       `gorm:"default:0"`
 	AvgWorkerUtilization float64   `gorm:"type:decimal(5,2);default:0"`
@@ -27,7 +27,7 @@ type EndpointMinuteStat struct {
 	WorkersTerminated    int       `gorm:"default:0"`
 	ColdStarts           int       `gorm:"default:0"`
 	AvgColdStartMs       float64   `gorm:"type:decimal(10,2);default:0"`
-	CreatedAt            time.Time `gorm:"autoCreateTime"`
+	CreatedAt            time.Time `gorm:"type:timestamptz(3);autoCreateTime"`
 }
 
 func (EndpointMinuteStat) TableName() string { return "endpoint_minute_stats" }
@@ -36,7 +36,7 @@ func (EndpointMinuteStat) TableName() string { return "endpoint_minute_stats" }
 type EndpointHourlyStat struct {
 	ID                   int64     `gorm:"primaryKey;autoIncrement"`
 	Endpoint             string    `gorm:"size:255;not null;uniqueIndex:uk_endpoint_hour,priority:1"`
-	StatHour             time.Time `gorm:"not null;uniqueIndex:uk_endpoint_hour,priority:2;index:idx_stat_hour"`
+	StatHour             time.Time `gorm:"type:timestamptz(3);not null;uniqueIndex:uk_endpoint_hour,priority:2;index:idx_stat_hour"`
 	ActiveWorkers        int       `gorm:"default:0"`
 	IdleWorkers          int       `gorm:"default:0"`
 	AvgWorkerUtilization float64   `gorm:"type:decimal(5,2);default:0"`
@@ -57,7 +57,7 @@ type EndpointHourlyStat struct {
 	WorkersTerminated    int       `gorm:"default:0"`
 	ColdStarts           int       `gorm:"default:0"`
 	AvgColdStartMs       float64   `gorm:"type:decimal(10,2);default:0"`
-	CreatedAt            time.Time `gorm:"autoCreateTime"`
+	CreatedAt            time.Time `gorm:"type:timestamptz(3);autoCreateTime"`
 }
 
 func (EndpointHourlyStat) TableName() string { return "endpoint_hourly_stats" }
@@ -87,7 +87,7 @@ type EndpointDailyStat struct {
 	WorkersTerminated    int       `gorm:"default:0"`
 	ColdStarts           int       `gorm:"default:0"`
 	AvgColdStartMs       float64   `gorm:"type:decimal(10,2);default:0"`
-	CreatedAt            time.Time `gorm:"autoCreateTime"`
+	CreatedAt            time.Time `gorm:"type:timestamptz(3);autoCreateTime"`
 }
 
 func (EndpointDailyStat) TableName() string { return "endpoint_daily_stats" }

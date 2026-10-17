@@ -6,16 +6,18 @@ server:
   api_key: ""  # API key for worker authentication (optional)
 
 redis:
-  addr: "localhost:6379"
+  addr: "localhost:16379"
   password: ""
   db: 0
 
-mysql:
+postgres:
   host: "localhost"
-  port: 3306
-  user: "root"
-  password: "password"
+  port: 15433
+  user: "wavespeed"
+  password: "wavespeed"
   database: "waverless"
+  sslmode: "disable"
+  timezone: "UTC"
 
 queue:
   concurrency: 10
@@ -85,8 +87,8 @@ notification:
 
 providers:
   deployment: "k8s"  # k8s, docker, novita
-  queue: "redis"     # redis, mysql
-  metadata: "mysql"  # redis, mysql
+  queue: "redis"     # redis
+  metadata: "postgres"  # postgres (persistent), redis (ephemeral)
 
 # Novita Serverless Configuration
 novita:

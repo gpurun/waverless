@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -148,8 +149,15 @@ func (c PostgreSQLConfig) DSN() string {
 	if tz == "" {
 		tz = "UTC"
 	}
+	// Keyword/value DSNs support characters such as spaces, quotes, and
+	// backslashes in passwords without URL-encoding ambiguity.
+	quote := func(value string) string {
+		value = strings.ReplaceAll(value, `\`, `\\`)
+		value = strings.ReplaceAll(value, `'`, `\'`)
+		return `'` + value + `'`
+	}
 	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s TimeZone=%s",
-		host, port, c.User, c.Password, c.Database, sslmode, tz)
+		quote(host), port, quote(c.User), quote(c.Password), quote(c.Database), quote(sslmode), quote(tz))
 }
 
 // ProxyConfig Proxy configuration for network connections
@@ -300,7 +308,7 @@ func Init() error {
 // applyEnvOverrides applies environment variable overrides to the configuration.
 // Environment variables take precedence over config file values.
 func applyEnvOverrides(cfg *Config) {
-	// Metadata storage provider selection (mysql | postgres)
+	// Metadata storage provider selection (mysql | postgres).
 	if v := os.Getenv("METADATA_PROVIDER"); v != "" {
 		if cfg.Providers == nil {
 			cfg.Providers = &ProvidersConfig{}

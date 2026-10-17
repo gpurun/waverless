@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: waverless-postgres
+  namespace: wavespeed
+  labels:
+    app: waverless-postgres
+spec:
+  serviceName: waverless-postgres-svc
+  replicas: 1
+  selector:
+    matchLabels:
+      app: waverless-postgres
+  template:
+    metadata:
+      labels:
+        app: waverless-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:17-alpine
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: waverless
+            - name: POSTGRES_USER
+              value: wavespeed
+            - name: POSTGRES_PASSWORD
+              value: wavespeed
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          resources:
+            requests:
+              memory: 512Mi
+              cpu: 200m
+            limits:
+              memory: 1Gi
+              cpu: 1
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U wavespeed -d waverless"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U wavespeed -d waverless"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 20Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: waverless-postgres-svc
+  namespace: wavespeed
+spec:
+  selector:
+    app: waverless-postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+  type: ClusterIP

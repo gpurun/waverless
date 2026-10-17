@@ -14,6 +14,22 @@ import (
 	"github.com/leanovate/gopter/prop"
 )
 
+func TestPostgreSQLDSNQuotesCredentials(t *testing.T) {
+	cfg := PostgreSQLConfig{
+		Host:     "db.example.test",
+		Port:     5432,
+		User:     "user name",
+		Password: "pa'ss\\word",
+		Database: "db name",
+		SSLMode:  "require",
+		TimeZone: "Asia/Shanghai",
+	}
+	want := "host='db.example.test' port=5432 user='user name' password='pa\\'ss\\\\word' dbname='db name' sslmode='require' TimeZone='Asia/Shanghai'"
+	if got := cfg.DSN(); got != want {
+		t.Fatalf("DSN() = %q, want %q", got, want)
+	}
+}
+
 // ============================================================================
 // Property-based tests for Property 9: Configuration Fallback to Defaults
 // ============================================================================

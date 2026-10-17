@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// ScalingEventRepository handles scaling event persistence in MySQL
+// ScalingEventRepository handles scaling event persistence.
 type ScalingEventRepository struct {
 	ds *Datastore
 }

@@ -5,7 +5,7 @@ server:
   base_url: http://localhost:8080
 
 redis:
-  addr: 127.0.0.1:6379
+  addr: 127.0.0.1:16379
   password: ""
   db: 2
 
@@ -14,7 +14,7 @@ mysql:
   host: 127.0.0.1
   port: 13306
   user: wavespeed
-  password: wavespeed&123!
+  password: wavespeed
   database: waverless
   # Optional: Proxy configuration (uncomment to enable)
   # proxy:
@@ -29,9 +29,9 @@ mysql:
 #   psql -h <host> -U <user> -d <database> -f scripts/init_postgres.sql
 postgres:
   host: 127.0.0.1
-  port: 5432
+  port: 15433
   user: wavespeed
-  password: wavespeed&123!
+  password: wavespeed
   database: waverless
   sslmode: disable   # disable, require, verify-ca, verify-full
   timezone: UTC
@@ -87,8 +87,8 @@ autoscaler:
 # Storage providers configuration
 providers:
   deployment: k8s            # Deployment provider: k8s, docker, novita
-  metadata: mysql               # Metadata storage: mysql (persistent), redis (ephemeral)
-  # MySQL stores: endpoints, tasks, autoscaler configs, scaling events
+  metadata: postgres            # Metadata storage: postgres (persistent), redis (ephemeral)
+  # PostgreSQL stores: endpoints, tasks, autoscaler configs, scaling events
   # Redis stores: worker heartbeats, task queues, distributed locks, cache
 
 # Novita Serverless Configuration

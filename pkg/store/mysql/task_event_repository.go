@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// TaskEventRepository handles task event persistence in MySQL
+// TaskEventRepository handles task event persistence.
 type TaskEventRepository struct {
 	ds *Datastore
 }
@@ -75,7 +75,6 @@ func (r *TaskEventRepository) DeleteOldEvents(ctx context.Context, olderThan tim
 func generateEventID() string {
 	return uuid.New().String()
 }
-
 
 // CleanupOldEvents removes task events older than the given time in batches
 func (r *TaskEventRepository) CleanupOldEvents(ctx context.Context, before time.Time) (int64, error) {

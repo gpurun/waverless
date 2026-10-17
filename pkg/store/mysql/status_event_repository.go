@@ -21,7 +21,7 @@ type StatusEventFilter struct {
 	Offset    int
 }
 
-// StatusEventRepository handles status event persistence in MySQL
+// StatusEventRepository handles status event persistence.
 type StatusEventRepository struct {
 	ds *Datastore
 }

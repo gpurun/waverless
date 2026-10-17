@@ -8,7 +8,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// EndpointRepository handles endpoint persistence in MySQL
+// EndpointRepository handles endpoint persistence.
 type EndpointRepository struct {
 	ds *Datastore
 }

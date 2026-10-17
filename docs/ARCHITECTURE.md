@@ -4,11 +4,11 @@ Waverless is a **Serverless GPU task scheduling system** providing RunPod API-co
 
 ## Core Features
 
-- ✅ **RunPod Compatible API** - Zero-code migration from runpod SDK
-- ✅ **Autoscaling** - Queue-depth and resource-aware scaling with priority
-- ✅ **Graceful Shutdown** - Zero task loss during rolling updates
-- ✅ **Multi-tenant** - Isolated endpoints with independent configurations
-- ✅ **High Availability** - Multi-replica deployment with distributed locking
+- 鉁?**RunPod Compatible API** - Zero-code migration from runpod SDK
+- 鉁?**Autoscaling** - Queue-depth and resource-aware scaling with priority
+- 鉁?**Graceful Shutdown** - Zero task loss during rolling updates
+- 鉁?**Multi-tenant** - Isolated endpoints with independent configurations
+- 鉁?**High Availability** - Multi-replica deployment with distributed locking
 
 ---
 
@@ -37,7 +37,7 @@ graph TB
     end
 
     subgraph "Infrastructure Layer"
-        MySQL[(MySQL)]
+        PostgreSQL[(PostgreSQL)]
         Redis[(Redis)]
         K8sClient[K8s Client]
     end
@@ -51,7 +51,7 @@ graph TB
     Router --> Handler --> Service
     Service --> TaskSvc & WorkerSvc & EndpointSvc
     TaskSvc & WorkerSvc & EndpointSvc --> Autoscaler
-    TaskSvc & WorkerSvc & EndpointSvc --> MySQL & Redis
+    TaskSvc & WorkerSvc & EndpointSvc --> PostgreSQL & Redis
     Autoscaler --> K8sClient
     K8sClient --> Deployments
     Informers --> WorkerSvc
@@ -73,7 +73,7 @@ graph TB
 **Data Flow**:
 ```mermaid
 flowchart LR
-    A[Create Task] --> B[MySQL Insert]
+    A[Create Task] --> B[PostgreSQL Insert]
     B --> C[Redis Queue]
     C --> D[Worker Pull]
     D --> E[Execute]
@@ -160,7 +160,7 @@ flowchart TB
     end
 
     subgraph "Actions"
-        A1[Sync to MySQL]
+        A1[Sync to PostgreSQL]
         A2[Mark OFFLINE]
         A3[Stop Task Assignment]
         A4[Record Failure]
@@ -219,10 +219,10 @@ erDiagram
 
 | Data | Storage | Reason |
 |------|---------|--------|
-| Task Metadata | MySQL | Persistence, transactions, queries |
+| Task Metadata | PostgreSQL | Persistence, transactions, queries |
 | Task Queue | Redis List | High-performance, atomic operations |
-| Worker State | MySQL | Persistence, complex queries |
-| Endpoint Config | MySQL | Persistent configuration |
+| Worker State | PostgreSQL | Persistence, complex queries |
+| Endpoint Config | PostgreSQL | Persistent configuration |
 | Distributed Lock | Redis | Multi-instance coordination |
 
 ---
@@ -233,7 +233,7 @@ erDiagram
 ```mermaid
 sequenceDiagram
     Client->>API: Submit Task
-    API->>MySQL: Insert task (PENDING)
+    API->>PostgreSQL: Insert task (PENDING)
     API->>Redis: Push to queue
     API-->>Client: Return task_id
 ```
@@ -242,17 +242,17 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     Worker->>API: Pull Task
-    API->>MySQL: Check worker status
+    API->>PostgreSQL: Check worker status
     
     alt Worker DRAINING
         API-->>Worker: Empty response
     else Worker ONLINE
         API->>Redis: Pop from queue
-        API->>MySQL: Update task (IN_PROGRESS)
-        API->>MySQL: Re-check worker status
+        API->>PostgreSQL: Update task (IN_PROGRESS)
+        API->>PostgreSQL: Re-check worker status
         
         alt Worker became DRAINING
-            API->>MySQL: Revert task (PENDING)
+            API->>PostgreSQL: Revert task (PENDING)
             API->>Redis: Push back to queue
             API-->>Worker: Empty response
         else Still ONLINE
@@ -271,11 +271,11 @@ sequenceDiagram
     participant Informer
     participant Lifecycle
     participant Worker
-    participant MySQL
+    participant PostgreSQL
 
     K8s->>Informer: Pod Termination Signal
     Informer->>Lifecycle: OnWorkerDraining
-    Lifecycle->>MySQL: Set DRAINING
+    Lifecycle->>PostgreSQL: Set DRAINING
     
     loop Until tasks complete
         Worker->>Worker: Complete current tasks
@@ -284,7 +284,7 @@ sequenceDiagram
 
     K8s->>Informer: Pod Deleted
     Informer->>Lifecycle: OnWorkerDelete
-    Lifecycle->>MySQL: Set OFFLINE
+    Lifecycle->>PostgreSQL: Set OFFLINE
 ```
 
 ### Rolling Update Optimization
@@ -351,12 +351,12 @@ flowchart LR
 graph TB
     subgraph "K8s Cluster"
         API[Waverless Pod]
-        MySQL[(MySQL)]
+        PostgreSQL[(PostgreSQL)]
         Redis[(Redis)]
         Workers[Worker Pods]
     end
 
-    API --> MySQL & Redis
+    API --> PostgreSQL & Redis
     Workers --> API
 ```
 
@@ -367,12 +367,12 @@ graph TB
         API1[Waverless-1]
         API2[Waverless-2]
         Lock[Distributed Lock<br/>Redis]
-        MySQL[(MySQL<br/>Primary + Replica)]
+        PostgreSQL[(PostgreSQL<br/>Primary + Replica)]
         Redis[(Redis<br/>Sentinel)]
     end
 
     API1 & API2 --> Lock
-    API1 & API2 --> MySQL & Redis
+    API1 & API2 --> PostgreSQL & Redis
 ```
 
 ---
@@ -383,7 +383,7 @@ graph TB
 |-----------|------------|---------|
 | Language | Go 1.21+ | Performance, K8s ecosystem |
 | Web Framework | Gin | HTTP server |
-| Database | MySQL 8.0+ | Persistent storage |
+| Database | PostgreSQL 17+ | Persistent metadata storage |
 | Cache/Queue | Redis 7.0+ | Task queue, locking |
 | K8s Client | client-go | Kubernetes integration |
 | ORM | GORM | Database operations |

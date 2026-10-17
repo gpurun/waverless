@@ -7,22 +7,22 @@ import (
 	"time"
 )
 
-// Task MySQL model for tasks table
+// Task database model for the tasks table.
 type Task struct {
 	ID          int64       `gorm:"primaryKey;autoIncrement" json:"id"`
 	TaskID      string      `gorm:"column:task_id;type:varchar(255);not null;uniqueIndex:idx_task_id_unique" json:"task_id"`
 	Endpoint    string      `gorm:"column:endpoint;type:varchar(255);not null;index:idx_endpoint_status,priority:1" json:"endpoint"`
-	Input       JSONMap     `gorm:"column:input;type:json;not null" json:"input"`
+	Input       JSONMap     `gorm:"column:input;type:jsonb;not null" json:"input"`
 	Status      string      `gorm:"column:status;type:varchar(50);not null;index:idx_status;index:idx_endpoint_status,priority:2" json:"status"`
-	Output      JSONMap     `gorm:"column:output;type:json" json:"output"`
+	Output      JSONMap     `gorm:"column:output;type:jsonb" json:"output"`
 	Error       string      `gorm:"column:error;type:text" json:"error"`
 	WorkerID    string      `gorm:"column:worker_id;type:varchar(255);index:idx_worker_id" json:"worker_id"`
 	WebhookURL  string      `gorm:"column:webhook_url;type:varchar(1000)" json:"webhook_url"`
-	CreatedAt   time.Time   `gorm:"column:created_at;type:datetime(3);not null;default:CURRENT_TIMESTAMP(3);index:idx_created_at" json:"created_at"`
-	UpdatedAt   time.Time   `gorm:"column:updated_at;type:datetime(3);not null;default:CURRENT_TIMESTAMP(3)" json:"updated_at"`
-	StartedAt   *time.Time  `gorm:"column:started_at;type:datetime(3)" json:"started_at"`
-	CompletedAt *time.Time  `gorm:"column:completed_at;type:datetime(3);index:idx_completed_at" json:"completed_at"`
-	Extend      *TaskExtend `gorm:"column:extend;type:json" json:"extend,omitempty"`
+	CreatedAt   time.Time   `gorm:"column:created_at;type:timestamptz(3);not null;default:CURRENT_TIMESTAMP(3);index:idx_created_at" json:"created_at"`
+	UpdatedAt   time.Time   `gorm:"column:updated_at;type:timestamptz(3);not null;default:CURRENT_TIMESTAMP(3)" json:"updated_at"`
+	StartedAt   *time.Time  `gorm:"column:started_at;type:timestamptz(3)" json:"started_at"`
+	CompletedAt *time.Time  `gorm:"column:completed_at;type:timestamptz(3);index:idx_completed_at" json:"completed_at"`
+	Extend      *TaskExtend `gorm:"column:extend;type:jsonb" json:"extend,omitempty"`
 }
 
 // TaskExtend task execution history (stored in JSON)

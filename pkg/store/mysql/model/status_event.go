@@ -27,8 +27,8 @@ type StatusEvent struct {
 	Phase      *string   `gorm:"column:phase;type:varchar(32)" json:"phase,omitempty"`
 	Reason     *string   `gorm:"column:reason;type:varchar(255)" json:"reason,omitempty"`
 	Message    *string   `gorm:"column:message;type:text" json:"message,omitempty"`
-	SpotStatus JSONMap   `gorm:"column:spot_status;type:json" json:"spotStatus,omitempty"`
-	CreatedAt  time.Time `gorm:"column:created_at;type:datetime(3);not null;default:CURRENT_TIMESTAMP(3);index:idx_created_at" json:"createdAt"`
+	SpotStatus JSONMap   `gorm:"column:spot_status;type:jsonb" json:"spotStatus,omitempty"`
+	CreatedAt  time.Time `gorm:"column:created_at;type:timestamptz(3);not null;default:CURRENT_TIMESTAMP(3);index:idx_created_at" json:"createdAt"`
 }
 
 // TableName specifies the table name for StatusEvent

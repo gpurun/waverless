@@ -24,7 +24,7 @@ func NewWorkerRepository(ds *Datastore) *WorkerRepository {
 }
 
 // UpdateHeartbeat updates worker heartbeat, status and jobs (sets status to ONLINE/BUSY)
-// Uses ON DUPLICATE KEY UPDATE to avoid race conditions in concurrent heartbeat scenarios
+// Uses a dialect-specific upsert to avoid races in concurrent heartbeat scenarios.
 func (r *WorkerRepository) UpdateHeartbeat(ctx context.Context, workerID, endpoint string, jobsInProgress []string, jobsInProgressCount int, version string) error {
 	now := time.Now()
 	currentJobs := len(jobsInProgress)

@@ -23,7 +23,7 @@ type Repository struct {
 	StatusEvent      *StatusEventRepository
 }
 
-// NewRepository creates a new MySQL repository with all sub-repositories
+// NewRepository creates a new MySQL repository with all sub-repositories.
 func NewRepository(dsn string, proxyConfig *config.ProxyConfig) (*Repository, error) {
 	ds, err := NewDatastore(dsn, proxyConfig)
 	if err != nil {
@@ -32,7 +32,7 @@ func NewRepository(dsn string, proxyConfig *config.ProxyConfig) (*Repository, er
 	return newRepository(ds), nil
 }
 
-// NewPostgresRepository creates a new PostgreSQL repository with all sub-repositories
+// NewPostgresRepository creates a new PostgreSQL repository with all sub-repositories.
 func NewPostgresRepository(dsn string, proxyConfig *config.ProxyConfig) (*Repository, error) {
 	ds, err := NewPostgresDatastore(dsn, proxyConfig)
 	if err != nil {

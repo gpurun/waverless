@@ -1,10 +1,25 @@
-version: '3.8'
-
 services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: waverless
+      POSTGRES_USER: wavespeed
+      POSTGRES_PASSWORD: wavespeed
+    ports:
+      - "15433:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./scripts/init_postgres.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wavespeed -d waverless"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "16379:6379"
     volumes:
       - redis-data:/data
     command: redis-server --appendonly yes
@@ -15,10 +30,39 @@ services:
       - "8080:8080"
     environment:
       - CONFIG_PATH=/app/config/config.yaml
+      - REDIS_ADDR=redis:6379
+      - METADATA_PROVIDER=postgres
+      - PG_HOST=postgres
+      - PG_PORT=5432
+      - PG_USER=wavespeed
+      - PG_PASSWORD=wavespeed
+      - PG_DATABASE=waverless
+      - PG_SSLMODE=disable
     depends_on:
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
     volumes:
       - ./config:/app/config
 
+  test:
+    image: golang:1.25-bookworm
+    working_dir: /src
+    profiles: ["test"]
+    volumes:
+      - .:/src
+      - go-mod-cache:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
+    environment:
+      PG_TEST_DSN: host=postgres port=5432 user=wavespeed password=wavespeed dbname=waverless sslmode=disable TimeZone=UTC
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["go", "test", "./..."]
+
 volumes:
+  postgres-data:
   redis-data:
+  go-mod-cache:
+  go-build-cache:

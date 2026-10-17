@@ -51,7 +51,7 @@ func (app *Application) initLogger() error {
 	return nil
 }
 
-// initMySQL initializes the metadata database (MySQL or PostgreSQL).
+// initMySQL initializes the configured metadata database (PostgreSQL by default).
 // The driver is selected via providers.metadata (mysql | postgres) or the
 // METADATA_PROVIDER environment variable.
 func (app *Application) initMySQL() error {

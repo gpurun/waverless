@@ -119,7 +119,7 @@ func NewMonitoringRepository(ds *Datastore) *MonitoringRepository {
 	return &MonitoringRepository{ds: ds}
 }
 
-// UpsertMinuteStat creates or updates minute-level statistics
+// UpsertMinuteStat creates or updates minute-level statistics.
 func (r *MonitoringRepository) UpsertMinuteStat(ctx context.Context, stat *model.EndpointMinuteStat) error {
 	return r.ds.DB(ctx).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "endpoint"}, {Name: "stat_minute"}},
@@ -185,7 +185,7 @@ func (r *MonitoringRepository) CleanupOldDailyStats(ctx context.Context, before 
 	return result.RowsAffected, result.Error
 }
 
-// AggregateMinuteStats aggregates task_events and worker_events into minute-level statistics
+// AggregateMinuteStats aggregates task_events and worker_events into minute-level statistics.
 func (r *MonitoringRepository) AggregateMinuteStats(ctx context.Context, endpoint string, from, to time.Time) (*model.EndpointMinuteStat, error) {
 	stat := &model.EndpointMinuteStat{Endpoint: endpoint, StatMinute: from}
 
@@ -197,7 +197,7 @@ func (r *MonitoringRepository) AggregateMinuteStats(ctx context.Context, endpoin
 		TasksTimeout   int `gorm:"column:tasks_timeout"`
 		TasksRetried   int `gorm:"column:tasks_retried"`
 	}
-	r.ds.DB(ctx).Raw(`
+	if err := r.ds.DB(ctx).Raw(`
 		SELECT
 			COUNT(CASE WHEN event_type = 'TASK_CREATED' THEN 1 END) as tasks_submitted,
 			COUNT(CASE WHEN event_type = 'TASK_COMPLETED' THEN 1 END) as tasks_completed,
@@ -205,7 +205,9 @@ func (r *MonitoringRepository) AggregateMinuteStats(ctx context.Context, endpoin
 			COUNT(CASE WHEN event_type = 'TASK_TIMEOUT' THEN 1 END) as tasks_timeout,
 			COUNT(CASE WHEN event_type = 'TASK_REQUEUED' THEN 1 END) as tasks_retried
 		FROM task_events WHERE endpoint = ? AND event_time >= ? AND event_time < ?
-	`, endpoint, from, to).Scan(&taskStats)
+	`, endpoint, from, to).Scan(&taskStats).Error; err != nil {
+		return nil, fmt.Errorf("aggregate task counts: %w", err)
+	}
 	stat.TasksSubmitted = taskStats.TasksSubmitted
 	stat.TasksCompleted = taskStats.TasksCompleted
 	stat.TasksFailed = taskStats.TasksFailed
@@ -214,12 +216,14 @@ func (r *MonitoringRepository) AggregateMinuteStats(ctx context.Context, endpoin
 
 	// 2. AvgQueueWaitMs from TASK_ASSIGNED events
 	var queueWait float64
-	r.ds.DB(ctx).Raw(`
+	if err := r.ds.DB(ctx).Raw(`
 		SELECT COALESCE(AVG(queue_wait_ms), 0)
 		FROM task_events 
 		WHERE endpoint = ? AND event_time >= ? AND event_time < ? 
 		AND event_type = 'TASK_ASSIGNED' AND queue_wait_ms IS NOT NULL
-	`, endpoint, from, to).Scan(&queueWait)
+	`, endpoint, from, to).Scan(&queueWait).Error; err != nil {
+		return nil, fmt.Errorf("aggregate queue wait: %w", err)
+	}
 	stat.AvgQueueWaitMs = queueWait
 
 	// 3. Execution time stats from TASK_COMPLETED events
@@ -228,7 +232,7 @@ func (r *MonitoringRepository) AggregateMinuteStats(ctx context.Context, endpoin
 		P50Ms float64 `gorm:"column:p50_ms"`
 		P95Ms float64 `gorm:"column:p95_ms"`
 	}
-	r.ds.DB(ctx).Raw(`
+	if err := r.ds.DB(ctx).Raw(`
 		SELECT 
 			COALESCE(AVG(execution_duration_ms), 0) as avg_ms,
 			COALESCE(MAX(CASE WHEN pct <= 0.50 THEN execution_duration_ms END), 0) as p50_ms,
@@ -239,7 +243,9 @@ func (r *MonitoringRepository) AggregateMinuteStats(ctx context.Context, endpoin
 			WHERE endpoint = ? AND event_time >= ? AND event_time < ? 
 			AND event_type = 'TASK_COMPLETED' AND execution_duration_ms IS NOT NULL
 		) t
-	`, endpoint, from, to).Scan(&execStats)
+	`, endpoint, from, to).Scan(&execStats).Error; err != nil {
+		return nil, fmt.Errorf("aggregate execution times: %w", err)
+	}
 	stat.AvgExecutionMs = execStats.AvgMs
 	stat.P50ExecutionMs = execStats.P50Ms
 	stat.P95ExecutionMs = execStats.P95Ms
@@ -250,13 +256,15 @@ func (r *MonitoringRepository) AggregateMinuteStats(ctx context.Context, endpoin
 		IdleWorkers   int `gorm:"column:idle_workers"`
 		TotalWorkers  int `gorm:"column:total_workers"`
 	}
-	r.ds.DB(ctx).Raw(`
+	if err := r.ds.DB(ctx).Raw(`
 		SELECT
 			COUNT(CASE WHEN current_jobs > 0 THEN 1 END) as active_workers,
 			COUNT(CASE WHEN current_jobs = 0 THEN 1 END) as idle_workers,
 			COUNT(*) as total_workers
 		FROM workers WHERE endpoint = ? AND status IN ('ONLINE', 'BUSY', 'DRAINING')
-	`, endpoint).Scan(&workerStats)
+	`, endpoint).Scan(&workerStats).Error; err != nil {
+		return nil, fmt.Errorf("aggregate worker counts: %w", err)
+	}
 	stat.ActiveWorkers = workerStats.ActiveWorkers
 	stat.IdleWorkers = workerStats.IdleWorkers
 	// Utilization will be calculated after idle time is computed
@@ -271,7 +279,7 @@ func (r *MonitoringRepository) AggregateMinuteStats(ctx context.Context, endpoin
 		Count     int     `gorm:"column:cnt"`
 	}
 	idleExpr := r.microsBetweenSQL("?", "event_time")
-	r.ds.DB(ctx).Raw(fmt.Sprintf(`
+	if err := r.ds.DB(ctx).Raw(fmt.Sprintf(`
 		SELECT 
 			COALESCE(SUM(CAST(LEAST(idle_duration_ms, %s / 1000) AS DECIMAL(20,4))), 0) as sum_idle_ms,
 			COALESCE(MAX(CAST(LEAST(idle_duration_ms, %s / 1000) AS DECIMAL(20,4))), 0) as max_idle_ms,
@@ -279,20 +287,24 @@ func (r *MonitoringRepository) AggregateMinuteStats(ctx context.Context, endpoin
 		FROM worker_events 
 		WHERE endpoint = ? AND event_time >= ? AND event_time < ? 
 		AND event_type = 'WORKER_TASK_PULLED' AND idle_duration_ms IS NOT NULL
-	`, idleExpr, idleExpr), from, from, endpoint, from, to).Scan(&eventIdleStats)
+	`, idleExpr, idleExpr), from, from, endpoint, from, to).Scan(&eventIdleStats).Error; err != nil {
+		return nil, fmt.Errorf("aggregate event idle time: %w", err)
+	}
 
 	// Part 2: Current idle time for workers still idle at end of window
 	// Use COALESCE(last_task_time, created_at) to handle new workers that never completed a task
 	var currentIdleMs int64
 	currentIdleExpr := r.microsBetweenSQL("GREATEST(COALESCE(last_task_time, created_at), ?)", "?")
-	r.ds.DB(ctx).Raw(fmt.Sprintf(`
+	if err := r.ds.DB(ctx).Raw(fmt.Sprintf(`
 		SELECT COALESCE(CAST(SUM(
 			%s / 1000
 		) AS %s), 0)
 		FROM workers
 		WHERE endpoint = ? AND status IN ('ONLINE', 'BUSY', 'DRAINING') AND current_jobs = 0
 		AND COALESCE(last_task_time, created_at) < ?
-	`, currentIdleExpr, r.castIntType()), from, to, endpoint, to).Scan(&currentIdleMs)
+	`, currentIdleExpr, r.castIntType()), from, to, endpoint, to).Scan(&currentIdleMs).Error; err != nil {
+		return nil, fmt.Errorf("aggregate current idle time: %w", err)
+	}
 
 	// Part 3: WORKER_TASK_PULLED events after window [to, to+2min) - their idle started before window end
 	// Calculate how much of their idle time falls within [from, to)
@@ -300,7 +312,7 @@ func (r *MonitoringRepository) AggregateMinuteStats(ctx context.Context, endpoin
 	var futureIdleMs int64
 	futureFromExpr := r.microsBetweenSQL("?", "event_time")
 	futureToExpr := r.microsBetweenSQL("event_time", "?")
-	r.ds.DB(ctx).Raw(fmt.Sprintf(`
+	if err := r.ds.DB(ctx).Raw(fmt.Sprintf(`
 		SELECT COALESCE(CAST(SUM(
 			LEAST(
 				%s / 1000,
@@ -311,7 +323,9 @@ func (r *MonitoringRepository) AggregateMinuteStats(ctx context.Context, endpoin
 		WHERE endpoint = ? AND event_time >= ? AND event_time < ?
 		AND event_type = 'WORKER_TASK_PULLED' AND idle_duration_ms IS NOT NULL
 		AND %s / 1000 + idle_duration_ms > 0
-	`, futureFromExpr, futureFromExpr, r.castIntType(), futureToExpr), from, from, endpoint, to, to.Add(2*time.Minute), to).Scan(&futureIdleMs)
+	`, futureFromExpr, futureFromExpr, r.castIntType(), futureToExpr), from, from, endpoint, to, to.Add(2*time.Minute), to).Scan(&futureIdleMs).Error; err != nil {
+		return nil, fmt.Errorf("aggregate future idle time: %w", err)
+	}
 
 	totalIdleMs := int64(eventIdleStats.SumIdleMs) + currentIdleMs + futureIdleMs
 	if totalIdleMs > windowMs*int64(workerStats.TotalWorkers) && workerStats.TotalWorkers > 0 {
@@ -358,13 +372,15 @@ func (r *MonitoringRepository) AggregateMinuteStats(ctx context.Context, endpoin
 		Created    int `gorm:"column:created"`
 		Terminated int `gorm:"column:term_count"`
 	}
-	r.ds.DB(ctx).Raw(`
+	if err := r.ds.DB(ctx).Raw(`
 		SELECT 
 			COUNT(CASE WHEN event_type = 'WORKER_REGISTERED' THEN 1 END) as created,
 			COUNT(CASE WHEN event_type = 'WORKER_OFFLINE' THEN 1 END) as term_count
 		FROM worker_events 
 		WHERE endpoint = ? AND event_time >= ? AND event_time < ?
-	`, endpoint, from, to).Scan(&lifecycleStats)
+	`, endpoint, from, to).Scan(&lifecycleStats).Error; err != nil {
+		return nil, fmt.Errorf("aggregate worker lifecycle: %w", err)
+	}
 	stat.WorkersCreated = lifecycleStats.Created
 	stat.WorkersTerminated = lifecycleStats.Terminated
 
@@ -373,12 +389,14 @@ func (r *MonitoringRepository) AggregateMinuteStats(ctx context.Context, endpoin
 		ColdStarts     int     `gorm:"column:cold_starts"`
 		AvgColdStartMs float64 `gorm:"column:avg_cold_start_ms"`
 	}
-	r.ds.DB(ctx).Raw(`
+	if err := r.ds.DB(ctx).Raw(`
 		SELECT COUNT(*) as cold_starts, COALESCE(AVG(cold_start_duration_ms), 0) as avg_cold_start_ms
 		FROM worker_events 
 		WHERE endpoint = ? AND event_time >= ? AND event_time < ? 
 		AND event_type = 'WORKER_REGISTERED' AND cold_start_duration_ms IS NOT NULL
-	`, endpoint, from, to).Scan(&coldStats)
+	`, endpoint, from, to).Scan(&coldStats).Error; err != nil {
+		return nil, fmt.Errorf("aggregate cold starts: %w", err)
+	}
 	stat.ColdStarts = coldStats.ColdStarts
 	stat.AvgColdStartMs = coldStats.AvgColdStartMs
 
@@ -391,13 +409,15 @@ func (r *MonitoringRepository) AggregateHourlyStats(ctx context.Context, endpoin
 	from, to := statHour, statHour.Add(time.Hour)
 
 	var count int64
-	r.ds.DB(ctx).Model(&model.EndpointMinuteStat{}).Where("endpoint = ? AND stat_minute >= ? AND stat_minute < ?", endpoint, from, to).Count(&count)
+	if err := r.ds.DB(ctx).Model(&model.EndpointMinuteStat{}).Where("endpoint = ? AND stat_minute >= ? AND stat_minute < ?", endpoint, from, to).Count(&count).Error; err != nil {
+		return nil, fmt.Errorf("count minute stats: %w", err)
+	}
 	if count == 0 {
 		return stat, nil
 	}
 
 	var result map[string]interface{}
-	r.ds.DB(ctx).Raw(`
+	if err := r.ds.DB(ctx).Raw(`
 		SELECT
 			COALESCE(AVG(active_workers), 0) as active_workers,
 			COALESCE(AVG(idle_workers), 0) as idle_workers,
@@ -420,7 +440,9 @@ func (r *MonitoringRepository) AggregateHourlyStats(ctx context.Context, endpoin
 			COALESCE(SUM(cold_starts), 0) as cold_starts,
 			COALESCE(AVG(avg_cold_start_ms), 0) as avg_cold_start_ms
 		FROM endpoint_minute_stats WHERE endpoint = ? AND stat_minute >= ? AND stat_minute < ?
-	`, endpoint, from, to).Scan(&result)
+	`, endpoint, from, to).Scan(&result).Error; err != nil {
+		return nil, fmt.Errorf("aggregate hourly stats: %w", err)
+	}
 
 	if result != nil {
 		stat.ActiveWorkers = toInt(result["active_workers"])
@@ -454,13 +476,15 @@ func (r *MonitoringRepository) AggregateDailyStats(ctx context.Context, endpoint
 	from, to := statDate, statDate.AddDate(0, 0, 1)
 
 	var count int64
-	r.ds.DB(ctx).Model(&model.EndpointHourlyStat{}).Where("endpoint = ? AND stat_hour >= ? AND stat_hour < ?", endpoint, from, to).Count(&count)
+	if err := r.ds.DB(ctx).Model(&model.EndpointHourlyStat{}).Where("endpoint = ? AND stat_hour >= ? AND stat_hour < ?", endpoint, from, to).Count(&count).Error; err != nil {
+		return nil, fmt.Errorf("count hourly stats: %w", err)
+	}
 	if count == 0 {
 		return stat, nil
 	}
 
 	var result map[string]interface{}
-	r.ds.DB(ctx).Raw(`
+	if err := r.ds.DB(ctx).Raw(`
 		SELECT
 			COALESCE(AVG(active_workers), 0) as active_workers,
 			COALESCE(AVG(idle_workers), 0) as idle_workers,
@@ -483,7 +507,9 @@ func (r *MonitoringRepository) AggregateDailyStats(ctx context.Context, endpoint
 			COALESCE(SUM(cold_starts), 0) as cold_starts,
 			COALESCE(AVG(avg_cold_start_ms), 0) as avg_cold_start_ms
 		FROM endpoint_hourly_stats WHERE endpoint = ? AND stat_hour >= ? AND stat_hour < ?
-	`, endpoint, from, to).Scan(&result)
+	`, endpoint, from, to).Scan(&result).Error; err != nil {
+		return nil, fmt.Errorf("aggregate daily stats: %w", err)
+	}
 
 	if result != nil {
 		stat.ActiveWorkers = toInt(result["active_workers"])
@@ -531,28 +557,34 @@ func (r *MonitoringRepository) GetAllEndpoints(ctx context.Context) ([]string, e
 func (r *MonitoringRepository) GetRealtimeMetrics(ctx context.Context, endpoint string) (*RealtimeMetrics, error) {
 	metrics := &RealtimeMetrics{Endpoint: endpoint}
 
-	r.ds.DB(ctx).Raw(`
+	if err := r.ds.DB(ctx).Raw(`
 		SELECT COUNT(*) as total,
 			COUNT(CASE WHEN current_jobs > 0 THEN 1 END) as active,
 			COUNT(CASE WHEN current_jobs = 0 THEN 1 END) as idle
 		FROM workers WHERE endpoint = ? AND status IN ('ONLINE', 'BUSY', 'DRAINING')
-	`, endpoint).Scan(&metrics.Workers)
+	`, endpoint).Scan(&metrics.Workers).Error; err != nil {
+		return nil, fmt.Errorf("get realtime worker metrics: %w", err)
+	}
 
 	lastMinute := time.Now().Add(-time.Minute)
-	r.ds.DB(ctx).Raw(`
+	if err := r.ds.DB(ctx).Raw(`
 		SELECT
 			(SELECT COUNT(*) FROM tasks WHERE endpoint = ? AND status = 'PENDING') as in_queue,
 			(SELECT COUNT(*) FROM tasks WHERE endpoint = ? AND status = 'IN_PROGRESS') as running,
 			(SELECT COUNT(*) FROM task_events WHERE endpoint = ? AND event_type = 'TASK_COMPLETED' AND event_time >= ?) as completed_last_minute
-	`, endpoint, endpoint, endpoint, lastMinute).Scan(&metrics.Tasks)
+	`, endpoint, endpoint, endpoint, lastMinute).Scan(&metrics.Tasks).Error; err != nil {
+		return nil, fmt.Errorf("get realtime task metrics: %w", err)
+	}
 
 	last5Min := time.Now().Add(-5 * time.Minute)
-	r.ds.DB(ctx).Raw(`
+	if err := r.ds.DB(ctx).Raw(`
 		SELECT COALESCE(AVG(queue_wait_ms), 0) as avg_queue_wait_ms,
 			COALESCE(AVG(execution_duration_ms), 0) as avg_execution_ms,
 			COALESCE(AVG(total_duration_ms), 0) as avg_total_duration_ms
 		FROM task_events WHERE endpoint = ? AND event_type = 'TASK_COMPLETED' AND event_time >= ?
-	`, endpoint, last5Min).Scan(&metrics.Performance)
+	`, endpoint, last5Min).Scan(&metrics.Performance).Error; err != nil {
+		return nil, fmt.Errorf("get realtime performance metrics: %w", err)
+	}
 
 	return metrics, nil
 }
