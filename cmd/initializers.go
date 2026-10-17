@@ -52,34 +52,22 @@ func (app *Application) initLogger() error {
 	return nil
 }
 
-// initMySQL initializes the configured metadata database (PostgreSQL by default).
-// The driver is selected via providers.metadata (mysql | postgres) or the
-// METADATA_PROVIDER environment variable.
-func (app *Application) initMySQL() error {
+// initMetadataStore connects to the PostgreSQL metadata database.
+// Connection settings come from config and env (DATABASE_URL, PG_*, POSTGRES_*).
+func (app *Application) initMetadataStore() error {
 	driver := app.config.MetadataDriver()
-
-	var repo *mysqlstore.Repository
-	var err error
-
 	switch driver {
-	case "postgres", "postgresql":
-		dsn := app.config.Postgres.DSN()
-		logger.InfoCtx(app.ctx, "Connecting to metadata store: postgres (%s:%d/%s)",
-			app.config.Postgres.Host, app.config.Postgres.Port, app.config.Postgres.Database)
-		repo, err = mysqlstore.NewPostgresRepository(dsn, nil)
+	case "postgres":
+		// supported
+	case "mysql", "mariadb":
+		return fmt.Errorf("metadata driver %q is no longer supported; use PostgreSQL (providers.metadata: postgres or METADATA_PROVIDER=postgres)", driver)
 	default:
-		dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=UTC",
-			app.config.MySQL.User,
-			app.config.MySQL.Password,
-			app.config.MySQL.Host,
-			app.config.MySQL.Port,
-			app.config.MySQL.Database,
-		)
-		logger.InfoCtx(app.ctx, "Connecting to metadata store: mysql (%s:%d/%s)",
-			app.config.MySQL.Host, app.config.MySQL.Port, app.config.MySQL.Database)
-		repo, err = mysqlstore.NewRepository(dsn, app.config.MySQL.Proxy)
+		return fmt.Errorf("unsupported metadata driver %q (only postgres is supported)", driver)
 	}
 
+	dsn := app.config.MetadataDSN()
+	logger.InfoCtx(app.ctx, "Connecting to metadata store: PostgreSQL")
+	repo, err := mysqlstore.NewPostgresRepository(dsn, nil)
 	if err != nil {
 		return err
 	}

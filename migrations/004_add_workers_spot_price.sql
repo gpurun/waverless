@@ -1,6 +1,4 @@
--- Migration: Add spot price tracking fields to workers table
--- Records the Spot instance price at worker creation time for cost analysis and billing
+-- Migration: Add spot price tracking fields to workers table (PostgreSQL)
 
-ALTER TABLE workers
-    ADD COLUMN spot_price DECIMAL(10,6) DEFAULT NULL COMMENT 'Spot price (USD/hour) at worker creation time',
-    ADD COLUMN spot_instance_type VARCHAR(64) DEFAULT NULL COMMENT 'Spot instance type (e.g., g4dn.xlarge)';
+ALTER TABLE workers ADD COLUMN IF NOT EXISTS spot_price numeric(10,6) DEFAULT NULL;
+ALTER TABLE workers ADD COLUMN IF NOT EXISTS spot_instance_type varchar(64) DEFAULT NULL;

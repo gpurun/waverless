@@ -70,9 +70,15 @@ Access http://localhost:3000 (default: admin/admin)
 ### Local Development
 
 ```bash
-# Start dependencies
+# Start dependencies (or: docker compose up -d postgres redis)
 docker run -d -p 6379:6379 redis:7-alpine
-docker run -d -p 3306:3306 -e MYSQL_ROOT_PASSWORD=password -e MYSQL_DATABASE=waverless postgres:8.0
+docker run -d -p 15433:5432 \
+  -e POSTGRES_USER=wavespeed -e POSTGRES_PASSWORD=wavespeed -e POSTGRES_DB=waverless \
+  -v "$(pwd)/scripts/init_postgres.sql:/docker-entrypoint-initdb.d/001-init.sql:ro" \
+  postgres:17-alpine
+
+export METADATA_PROVIDER=postgres
+export PG_HOST=127.0.0.1 PG_PORT=15433 PG_USER=wavespeed PG_PASSWORD=wavespeed PG_DATABASE=waverless
 
 # Build and run
 make build
@@ -107,10 +113,15 @@ server:
 
 postgres:
   host: localhost
-  port: 3306
-  user: root
-  password: password
+  port: 5432
+  user: wavespeed
+  password: wavespeed
   database: waverless
+  sslmode: disable
+  timezone: UTC
+
+providers:
+  metadata: postgres
 
 redis:
   addr: localhost:6379
@@ -165,9 +176,11 @@ specs:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `METADATA_PROVIDER` | Metadata database; use `postgres` | `postgres` |
+| `METADATA_PROVIDER` | Metadata database (must be `postgres`) | `postgres` |
+| `DATABASE_URL` | Full PostgreSQL URL or libpq DSN (overrides discrete `PG_*` fields) | — |
 | `PG_HOST` / `PG_PORT` | PostgreSQL connection host / port | `127.0.0.1` / `5432` |
 | `PG_USER` / `PG_PASSWORD` / `PG_DATABASE` | PostgreSQL credentials and database | `wavespeed` / configured password / `waverless` |
+| `POSTGRES_*` | Aliases for `PG_*` (`POSTGRES_HOST`, `POSTGRES_DB`, etc.) | same as `PG_*` |
 | `PG_SSLMODE` / `PG_TIMEZONE` | PostgreSQL TLS mode / session timezone | `disable` / `UTC` |
 | `REDIS_ADDR` | Redis address | localhost:6379 |
 | `K8S_NAMESPACE` | K8s namespace | default |

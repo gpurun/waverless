@@ -72,6 +72,11 @@ flowchart TB
 # Local development
 docker compose up -d postgres redis
 cp config/config.example.yaml config/config.yaml
+# Metadata DB env (optional if config.yaml already has postgres.*):
+export METADATA_PROVIDER=postgres
+export PG_HOST=127.0.0.1 PG_PORT=15433 PG_USER=wavespeed PG_PASSWORD=wavespeed PG_DATABASE=waverless
+# Or a single connection string:
+# export DATABASE_URL="host=127.0.0.1 port=15433 user=wavespeed password=wavespeed dbname=waverless sslmode=disable"
 go run cmd/main.go
 
 # Run the complete test suite with Go 1.25 and the PostgreSQL integration test

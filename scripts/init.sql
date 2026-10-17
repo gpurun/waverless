@@ -1,5 +1,6 @@
--- Waverless Database Schema
--- Consolidated from all migrations
+-- DEPRECATED: MySQL schema retained for historical reference only.
+-- Use scripts/init_postgres.sql for all new deployments and migrations/.
+-- Waverless Database Schema (MySQL)
 -- Last updated: 2026-02-04
 
 -- ============================================================================

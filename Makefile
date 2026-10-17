@@ -41,4 +41,10 @@ docker-build:
 docker-run:
 	docker run -p 8080:8080 \
 		-e REDIS_ADDR=host.docker.internal:6379 \
+		-e METADATA_PROVIDER=postgres \
+		-e PG_HOST=host.docker.internal \
+		-e PG_PORT=15433 \
+		-e PG_USER=wavespeed \
+		-e PG_PASSWORD=wavespeed \
+		-e PG_DATABASE=waverless \
 		waverless:latest

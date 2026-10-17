@@ -88,8 +88,8 @@ notification:
 
 providers:
   deployment: "k8s"  # k8s, docker, novita, gongji
-  queue: "redis"     # redis, mysql
-  metadata: "postgres"  # postgres (persistent), redis (ephemeral)
+  queue: "redis"     # redis
+  metadata: "postgres"  # postgres (required for persistent metadata)
 
 # Novita Serverless Configuration
 novita:

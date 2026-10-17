@@ -27,7 +27,7 @@ const (
 )
 
 // Datastore wraps GORM DB and provides transaction support.
-// It is dialect-aware: it can be backed by MySQL or PostgreSQL.
+// Production uses PostgreSQL; MySQL helpers remain for legacy tests only.
 type Datastore struct {
 	db      *gorm.DB
 	dialect string
