@@ -15,8 +15,9 @@ type EndpointConfig struct {
 	Replicas    int `json:"replicas"`    // Current target replica count
 
 	// Scaling thresholds
-	ScaleUpThreshold  int `json:"scaleUpThreshold"`  // Queued task count threshold, triggers scale up when exceeded (default 1)
-	ScaleDownIdleTime int `json:"scaleDownIdleTime"` // Idle time (seconds), scale down when no tasks for this duration (default 300)
+	ScaleUpThreshold   int `json:"scaleUpThreshold"`   // Queued task count threshold, triggers scale up when exceeded (default 1)
+	ScaleUpWaitSeconds int `json:"scaleUpWaitSeconds"` // Oldest pending age (seconds) to trigger wait-age scale-up; 0 = disabled
+	ScaleDownIdleTime  int `json:"scaleDownIdleTime"`  // Idle time (seconds), scale down when no tasks for this duration (default 300)
 
 	// Cooldown periods
 	ScaleUpCooldown   int `json:"scaleUpCooldown"`   // Scale up cooldown time (seconds), default 30
@@ -37,15 +38,17 @@ type EndpointConfig struct {
 	AutoscalerEnabled *string `json:"autoscalerEnabled,omitempty"`
 
 	// Runtime state (not persisted)
-	ActualReplicas    int                `json:"actualReplicas,omitempty"`    // K8s actual running replica count
-	AvailableReplicas int                `json:"availableReplicas,omitempty"` // Available replica count
-	Conditions        []ReplicaCondition `json:"conditions,omitempty"`        // Deployment conditions
-	DrainingReplicas  int                `json:"drainingReplicas,omitempty"`  // Draining replica count
-	PendingTasks      int64              `json:"pendingTasks,omitempty"`      // Current queued task count
-	RunningTasks      int64              `json:"runningTasks,omitempty"`      // Current running task count
-	LastScaleTime     time.Time          `json:"lastScaleTime,omitempty"`     // Last scaling time
-	LastTaskTime      time.Time          `json:"lastTaskTime,omitempty"`      // Last task processing time
-	FirstPendingTime  time.Time          `json:"firstPendingTime,omitempty"`  // First task queue time (for starvation detection)
+	ActualReplicas     int                `json:"actualReplicas,omitempty"`     // K8s actual running replica count
+	AvailableReplicas  int                `json:"availableReplicas,omitempty"`  // Available replica count
+	Conditions         []ReplicaCondition `json:"conditions,omitempty"`         // Deployment conditions
+	DrainingReplicas   int                `json:"drainingReplicas,omitempty"`   // Draining replica count
+	PendingTasks       int64              `json:"pendingTasks,omitempty"`       // Current queued task count
+	RunningTasks       int64              `json:"runningTasks,omitempty"`       // Current running task count
+	PendingKnown       bool               `json:"pendingKnown,omitempty"`       // False when pending query failed (do not treat as empty)
+	OldestPendingSince time.Time          `json:"oldestPendingSince,omitempty"` // min(created_at) of pending tasks (wait-age)
+	LastScaleTime      time.Time          `json:"lastScaleTime,omitempty"`      // Last scaling time
+	LastTaskTime       time.Time          `json:"lastTaskTime,omitempty"`       // Last task processing time
+	FirstPendingTime   time.Time          `json:"firstPendingTime,omitempty"`   // First observed non-empty queue (starvation only; NOT wait-age)
 }
 
 // EffectivePriority calculates effective priority (including dynamic adjustments)

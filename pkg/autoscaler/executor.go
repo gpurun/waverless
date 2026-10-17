@@ -123,13 +123,10 @@ func (e *Executor) scaleUp(ctx context.Context, decision *ScaleDecision) error {
 	logger.InfoCtx(ctx, "scaling up %s from %d to %d replicas (reason: %s)",
 		decision.Endpoint, decision.CurrentReplicas, decision.DesiredReplicas, decision.Reason)
 
-	// Update K8s Deployment
-	req := &interfaces.UpdateDeploymentRequest{
-		Endpoint: decision.Endpoint,
-		Replicas: &decision.DesiredReplicas,
-	}
-	if _, err := e.deploymentProvider.UpdateDeployment(ctx, req); err != nil {
-		return fmt.Errorf("failed to update deployment: %w", err)
+	// Prefer ScaleApp (CoreDeploymentProvider) — Gongji/Novita OpenAPI path.
+	// Fall back to UpdateDeployment for providers that implement scale only there.
+	if err := e.applyDesiredReplicas(ctx, decision.Endpoint, decision.DesiredReplicas); err != nil {
+		return err
 	}
 
 	// Update metadata
@@ -265,6 +262,34 @@ func (e *Executor) scaleDown(ctx context.Context, decision *ScaleDecision) error
 	logger.InfoCtx(ctx, "selected idle worker for scale down: %s (endpoint: %s%s)",
 		targetPodName, decision.Endpoint, idleDurationMsg)
 
+	// External provider path (Gongji/Novita): ScaleApp only — no kubectl / drain labels.
+	if e.k8sProvider == nil {
+		if err := e.applyDesiredReplicas(ctx, decision.Endpoint, decision.DesiredReplicas); err != nil {
+			return fmt.Errorf("provider ScaleApp scale down failed: %w", err)
+		}
+		meta, err := e.endpointService.GetEndpoint(ctx, decision.Endpoint)
+		if err == nil && meta != nil {
+			meta.Replicas = decision.DesiredReplicas
+			meta.LastScaleTime = time.Now()
+			meta.UpdatedAt = time.Now()
+			_ = e.endpointService.UpdateEndpoint(ctx, meta)
+		}
+		event := &mysql.ScalingEvent{
+			EventID:      generateEventID(),
+			Endpoint:     decision.Endpoint,
+			Timestamp:    time.Now(),
+			Action:       "scale_down",
+			FromReplicas: decision.CurrentReplicas,
+			ToReplicas:   decision.DesiredReplicas,
+			Reason:       fmt.Sprintf("%s (provider ScaleApp; worker=%s)", decision.Reason, targetPodName),
+			QueueLength:  decision.QueueLength,
+			Priority:     decision.Priority,
+		}
+		_ = e.scalingEventRepo.Create(ctx, event)
+		logger.InfoCtx(ctx, "provider scale down applied for %s via ScaleApp to %d", decision.Endpoint, decision.DesiredReplicas)
+		return nil
+	}
+
 	// Step 5: Mark Pod as draining (prevent pulling new tasks) + set deletion priority
 	if e.k8sProvider != nil {
 		// 5.1: Mark draining label (business logic: prevent worker from pulling new tasks)
@@ -368,14 +393,9 @@ func (e *Executor) executeScaleDownConfirmed(ctx context.Context, decision *Scal
 		}
 	}
 
-	// Step 2: Update Deployment replicas, let K8s Deployment controller automatically select and delete marked Pod
-	req := &interfaces.UpdateDeploymentRequest{
-		Endpoint: decision.Endpoint,
-		Replicas: &decision.DesiredReplicas,
-	}
-
-	if _, err := e.deploymentProvider.UpdateDeployment(ctx, req); err != nil {
-		logger.ErrorCtx(ctx, "failed to update deployment replicas: %v", err)
+	// Step 2: Apply desired replicas (ScaleApp for external providers; UpdateDeployment for K8s)
+	if err := e.applyDesiredReplicas(ctx, decision.Endpoint, decision.DesiredReplicas); err != nil {
+		logger.ErrorCtx(ctx, "failed to apply desired replicas: %v", err)
 		return
 	}
 
@@ -457,6 +477,25 @@ func (e *Executor) revertScaleDown(ctx context.Context, decision *ScaleDecision,
 // generateEventID generates event ID
 func generateEventID() string {
 	return fmt.Sprintf("evt_%d", time.Now().UnixNano())
+}
+
+// applyDesiredReplicas writes the absolute desired replica count.
+// Uses ScaleApp (OpenAPI providers / K8s) as the primary path.
+func (e *Executor) applyDesiredReplicas(ctx context.Context, endpoint string, desired int) error {
+	if e.deploymentProvider == nil {
+		return fmt.Errorf("deployment provider is nil")
+	}
+	if err := e.deploymentProvider.ScaleApp(ctx, endpoint, desired); err != nil {
+		logger.WarnCtx(ctx, "ScaleApp failed for %s (desired=%d), falling back to UpdateDeployment: %v", endpoint, desired, err)
+		req := &interfaces.UpdateDeploymentRequest{
+			Endpoint: endpoint,
+			Replicas: &desired,
+		}
+		if _, err2 := e.deploymentProvider.UpdateDeployment(ctx, req); err2 != nil {
+			return fmt.Errorf("ScaleApp: %v; UpdateDeployment: %w", err, err2)
+		}
+	}
+	return nil
 }
 
 // isOrphanedEndpoint checks if an endpoint is orphaned (no deployment exists)

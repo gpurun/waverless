@@ -103,6 +103,7 @@ CREATE TABLE IF NOT EXISTS autoscaler_configs (
   max_replicas int NOT NULL DEFAULT 10,
   replicas int NOT NULL DEFAULT 1,
   scale_up_threshold int NOT NULL DEFAULT 1,
+  scale_up_wait_seconds int NOT NULL DEFAULT 0,
   scale_down_idle_time int NOT NULL DEFAULT 300,
   scale_up_cooldown int NOT NULL DEFAULT 30,
   scale_down_cooldown int NOT NULL DEFAULT 60,

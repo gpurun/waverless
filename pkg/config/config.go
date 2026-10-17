@@ -28,6 +28,7 @@ type Config struct {
 	Notification     NotificationConfig     `yaml:"notification"`        // Notification configuration
 	Providers        *ProvidersConfig       `yaml:"providers,omitempty"` // Providers configuration (optional)
 	Novita           NovitaConfig           `yaml:"novita"`              // Novita serverless configuration
+	Gongji           GongjiConfig           `yaml:"gongji"`              // Gongji (共绩) OpenAPI provider
 	ImageValidation  ImageValidationConfig  `yaml:"imageValidation"`     // Image validation configuration
 	ResourceReleaser ResourceReleaserConfig `yaml:"resourceReleaser"`    // Resource releaser configuration
 }
@@ -245,12 +246,13 @@ func (c *Config) MetadataDriver() string {
 
 // AutoScalerConfig autoscaler configuration
 type AutoScalerConfig struct {
-	Enabled        bool `yaml:"enabled"`         // Whether to enable autoscaling
-	Interval       int  `yaml:"interval"`        // Control loop interval (seconds)
-	MaxGPUCount    int  `yaml:"max_gpu_count"`   // Total cluster GPU count
-	MaxCPUCores    int  `yaml:"max_cpu_cores"`   // Total cluster CPU cores
-	MaxMemoryGB    int  `yaml:"max_memory_gb"`   // Total cluster memory (GB)
-	StarvationTime int  `yaml:"starvation_time"` // Starvation time threshold (seconds)
+	Enabled            bool `yaml:"enabled"`               // Whether to enable autoscaling
+	Interval           int  `yaml:"interval"`              // Control loop interval (seconds)
+	MaxGPUCount        int  `yaml:"max_gpu_count"`         // Total cluster GPU count
+	MaxCPUCores        int  `yaml:"max_cpu_cores"`         // Total cluster CPU cores
+	MaxMemoryGB        int  `yaml:"max_memory_gb"`         // Total cluster memory (GB)
+	StarvationTime     int  `yaml:"starvation_time"`       // Starvation time threshold (seconds)
+	ScaleUpWaitSeconds int  `yaml:"scale_up_wait_seconds"` // Global default oldest-pending wait (seconds) for wait-age scale-up; 0 = disabled unless endpoint overrides
 }
 
 // DockerConfig Docker registry authentication configuration
@@ -278,6 +280,22 @@ type NovitaConfig struct {
 	BaseURL      string `yaml:"base_url"`      // API base URL, default: https://api.novita.ai
 	ConfigDir    string `yaml:"config_dir"`    // Configuration directory (specs.yaml and templates)
 	PollInterval int    `yaml:"poll_interval"` // Poll interval for status updates (seconds, default: 10)
+}
+
+// GongjiConfig Gongji (共绩算力) OpenAPI provider configuration.
+// Credentials MUST come from Secret/env — never log token or signing_key.
+type GongjiConfig struct {
+	Enabled             bool   `yaml:"enabled"`               // Enable Gongji provider
+	BaseURL             string `yaml:"base_url"`              // Default https://openapi.suanli.cn
+	Token               string `yaml:"token"`                 // API token (env GONGJI_TOKEN)
+	SigningKey          string `yaml:"signing_key"`           // RSA private key PEM (env GONGJI_SIGNING_KEY); empty = token-only mode
+	APIVersion          string `yaml:"api_version"`           // Default 1.0.0
+	RequestTimeout      int    `yaml:"request_timeout"`       // Seconds, default 30
+	PollInterval        int    `yaml:"poll_interval"`         // Seconds, default 10
+	TenantID            int64  `yaml:"tenant_id"`             // Required for points list on some deployments
+	DefaultResourceMark string `yaml:"default_resource_mark"` // Default resources[].mark for Deploy
+	DefaultRegionName   string `yaml:"default_region_name"`   // Optional display region name
+	KeyID               string `yaml:"key_id"`                // Optional key id for ops rotation tracking
 }
 
 // Init initializes configuration
@@ -405,6 +423,51 @@ func applyEnvOverrides(cfg *Config) {
 		} else {
 			log.Printf("[WARN] Invalid RESOURCE_RELEASER_MAX_RETRIES value '%s', using config file value: %v", v, err)
 		}
+	}
+
+	// Gongji provider credentials (Secret/env injection — never log secrets)
+	if v := os.Getenv("GONGJI_ENABLED"); v != "" {
+		if enabled, err := strconv.ParseBool(v); err == nil {
+			cfg.Gongji.Enabled = enabled
+		} else {
+			log.Printf("[WARN] Invalid GONGJI_ENABLED value '%s': %v", v, err)
+		}
+	}
+	if v := os.Getenv("GONGJI_TOKEN"); v != "" {
+		cfg.Gongji.Token = v
+	}
+	if v := os.Getenv("GONGJI_BASE_URL"); v != "" {
+		cfg.Gongji.BaseURL = v
+	}
+	if v := os.Getenv("GONGJI_SIGNING_KEY"); v != "" {
+		cfg.Gongji.SigningKey = v
+	}
+	if v := os.Getenv("GONGJI_API_VERSION"); v != "" {
+		cfg.Gongji.APIVersion = v
+	}
+	if v := os.Getenv("GONGJI_REQUEST_TIMEOUT"); v != "" {
+		if seconds, err := strconv.Atoi(v); err == nil && seconds > 0 {
+			cfg.Gongji.RequestTimeout = seconds
+		}
+	}
+	if v := os.Getenv("GONGJI_POLL_INTERVAL"); v != "" {
+		if seconds, err := strconv.Atoi(v); err == nil && seconds > 0 {
+			cfg.Gongji.PollInterval = seconds
+		}
+	}
+	if v := os.Getenv("GONGJI_TENANT_ID"); v != "" {
+		if id, err := strconv.ParseInt(v, 10, 64); err == nil {
+			cfg.Gongji.TenantID = id
+		}
+	}
+	if v := os.Getenv("GONGJI_DEFAULT_RESOURCE_MARK"); v != "" {
+		cfg.Gongji.DefaultResourceMark = v
+	}
+	if v := os.Getenv("GONGJI_DEFAULT_REGION_NAME"); v != "" {
+		cfg.Gongji.DefaultRegionName = v
+	}
+	if v := os.Getenv("GONGJI_KEY_ID"); v != "" {
+		cfg.Gongji.KeyID = v
 	}
 }
 

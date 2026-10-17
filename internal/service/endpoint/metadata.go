@@ -224,22 +224,23 @@ func (m *MetadataManager) saveAutoscalerConfig(ctx context.Context, meta *interf
 	// For fields that allow 0 (like Priority=0 for best-effort, Cooldown=0 for no cooldown),
 	// we directly use the metadata value to preserve user's explicit 0 settings
 	config := &mysql.AutoscalerConfig{
-		Endpoint:          meta.Name,
-		DisplayName:       meta.DisplayName,
-		SpecName:          meta.SpecName,
-		MinReplicas:       meta.MinReplicas,                           // 0 is valid (scale-to-zero)
-		MaxReplicas:       meta.MaxReplicas,                           // Direct value (0 means no autoscaling)
-		Replicas:          meta.Replicas,                              // Direct value
-		ScaleUpThreshold:  defaultIfZero(meta.ScaleUpThreshold, 1),    // 0 behaves like 1 anyway
-		ScaleDownIdleTime: defaultIfZero(meta.ScaleDownIdleTime, 300), // Use default if not set
-		ScaleUpCooldown:   meta.ScaleUpCooldown,                       // 0 is valid (no cooldown)
-		ScaleDownCooldown: meta.ScaleDownCooldown,                     // 0 is valid (no cooldown)
-		Priority:          meta.Priority,                              // 0 is valid (lowest priority)
-		EnableDynamicPrio: enableDynamic,
-		HighLoadThreshold: defaultIfZero(meta.HighLoadThreshold, 10), // Use default if not set
-		PriorityBoost:     meta.PriorityBoost,                        // 0 is valid (no boost)
-		Enabled:           true,
-		AutoscalerEnabled: meta.AutoscalerEnabled,
+		Endpoint:           meta.Name,
+		DisplayName:        meta.DisplayName,
+		SpecName:           meta.SpecName,
+		MinReplicas:        meta.MinReplicas,                           // 0 is valid (scale-to-zero)
+		MaxReplicas:        meta.MaxReplicas,                           // Direct value (0 means no autoscaling)
+		Replicas:           meta.Replicas,                              // Direct value
+		ScaleUpThreshold:   defaultIfZero(meta.ScaleUpThreshold, 1),    // 0 behaves like 1 anyway
+		ScaleUpWaitSeconds: meta.ScaleUpWaitSeconds,                    // 0 = use global / disabled
+		ScaleDownIdleTime:  defaultIfZero(meta.ScaleDownIdleTime, 300), // Use default if not set
+		ScaleUpCooldown:    meta.ScaleUpCooldown,                       // 0 is valid (no cooldown)
+		ScaleDownCooldown:  meta.ScaleDownCooldown,                     // 0 is valid (no cooldown)
+		Priority:           meta.Priority,                              // 0 is valid (lowest priority)
+		EnableDynamicPrio:  enableDynamic,
+		HighLoadThreshold:  defaultIfZero(meta.HighLoadThreshold, 10), // Use default if not set
+		PriorityBoost:      meta.PriorityBoost,                        // 0 is valid (no boost)
+		Enabled:            true,
+		AutoscalerEnabled:  meta.AutoscalerEnabled,
 	}
 
 	// CRITICAL: Copy time tracking fields (for autoscaler decisions)
@@ -349,6 +350,7 @@ func mergeAutoscalerConfig(meta *interfaces.EndpointMetadata, cfg *mysql.Autosca
 	meta.MinReplicas = cfg.MinReplicas
 	meta.MaxReplicas = cfg.MaxReplicas
 	meta.ScaleUpThreshold = cfg.ScaleUpThreshold
+	meta.ScaleUpWaitSeconds = cfg.ScaleUpWaitSeconds
 	meta.ScaleDownIdleTime = cfg.ScaleDownIdleTime
 	meta.ScaleUpCooldown = cfg.ScaleUpCooldown
 	meta.ScaleDownCooldown = cfg.ScaleDownCooldown

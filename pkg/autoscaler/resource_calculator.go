@@ -31,6 +31,12 @@ func NewResourceCalculator(deploymentProvider interfaces.DeploymentProvider, end
 // CalculateEndpointResource calculates resources needed for a single Endpoint
 // OPTIMIZATION: Accept specName parameter to avoid re-querying metadata
 func (c *ResourceCalculator) CalculateEndpointResource(ctx context.Context, endpoint *EndpointConfig, replicas int) (*Resources, error) {
+	// External providers (Gongji/Novita): no K8s SpecManager — return placeholder unit
+	// resources. Cluster static GPU ledger must NOT block ScaleApp for outsourced pools.
+	if c.specManager == nil {
+		return &Resources{GPUCount: replicas, CPUCores: float64(replicas), MemoryGB: float64(replicas)}, nil
+	}
+
 	// Use SpecName from EndpointConfig to avoid redundant metadata query
 	specName := endpoint.SpecName
 	if specName == "" {

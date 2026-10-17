@@ -8,12 +8,13 @@ import (
 
 // Config defines autoscaler configuration
 type Config struct {
-	Enabled        bool `json:"enabled"`        // Whether autoscaling is enabled
-	Interval       int  `json:"interval"`       // Control loop interval (seconds)
-	MaxGPUCount    int  `json:"maxGpuCount"`    // Total cluster GPU count
-	MaxCPUCores    int  `json:"maxCpuCores"`    // Total cluster CPU cores
-	MaxMemoryGB    int  `json:"maxMemoryGB"`    // Total cluster memory (GB)
-	StarvationTime int  `json:"starvationTime"` // Starvation threshold (seconds), temporarily elevate priority if no resources allocated beyond this time
+	Enabled            bool `json:"enabled"`            // Whether autoscaling is enabled
+	Interval           int  `json:"interval"`           // Control loop interval (seconds)
+	MaxGPUCount        int  `json:"maxGpuCount"`        // Total cluster GPU count
+	MaxCPUCores        int  `json:"maxCpuCores"`        // Total cluster CPU cores
+	MaxMemoryGB        int  `json:"maxMemoryGB"`        // Total cluster memory (GB)
+	StarvationTime     int  `json:"starvationTime"`     // Starvation threshold (seconds)
+	ScaleUpWaitSeconds int  `json:"scaleUpWaitSeconds"` // Global default wait-age threshold (seconds); 0 disables unless endpoint overrides
 }
 
 // EndpointConfig is an alias to interfaces.EndpointConfig (domain model)

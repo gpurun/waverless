@@ -73,17 +73,18 @@ type EndpointMetadata struct {
 	GpuCount         int        `json:"gpuCount"`         // GPU count per replica (resources = per-gpu-config * gpuCount)
 
 	// Auto-scaling configuration
-	MinReplicas       int     `json:"minReplicas"`                 // Minimum replica count (default 0)
-	MaxReplicas       int     `json:"maxReplicas"`                 // Maximum replica count
-	ScaleUpThreshold  int     `json:"scaleUpThreshold"`            // Queue threshold for scale up (default 1)
-	ScaleDownIdleTime int     `json:"scaleDownIdleTime"`           // Idle time in seconds before scale down (default 300)
-	ScaleUpCooldown   int     `json:"scaleUpCooldown"`             // Scale up cooldown in seconds (default 30)
-	ScaleDownCooldown int     `json:"scaleDownCooldown"`           // Scale down cooldown in seconds (default 60)
-	Priority          int     `json:"priority"`                    // Priority for resource allocation (0-100, default 50)
-	EnableDynamicPrio *bool   `json:"enableDynamicPrio"`           // Enable dynamic priority (default true)
-	HighLoadThreshold int     `json:"highLoadThreshold"`           // High load threshold for priority boost (default 10)
-	PriorityBoost     int     `json:"priorityBoost"`               // Priority boost amount when high load (default 20)
-	AutoscalerEnabled *string `json:"autoscalerEnabled,omitempty"` // Autoscaler override: nil/"" = follow global, "disabled" = force off, "enabled" = force on
+	MinReplicas        int     `json:"minReplicas"`                 // Minimum replica count (default 0)
+	MaxReplicas        int     `json:"maxReplicas"`                 // Maximum replica count
+	ScaleUpThreshold   int     `json:"scaleUpThreshold"`            // Queue threshold for scale up (default 1)
+	ScaleUpWaitSeconds int     `json:"scaleUpWaitSeconds"`          // Oldest pending age (seconds) for wait-age scale-up
+	ScaleDownIdleTime  int     `json:"scaleDownIdleTime"`           // Idle time in seconds before scale down (default 300)
+	ScaleUpCooldown    int     `json:"scaleUpCooldown"`             // Scale up cooldown in seconds (default 30)
+	ScaleDownCooldown  int     `json:"scaleDownCooldown"`           // Scale down cooldown in seconds (default 60)
+	Priority           int     `json:"priority"`                    // Priority for resource allocation (0-100, default 50)
+	EnableDynamicPrio  *bool   `json:"enableDynamicPrio"`           // Enable dynamic priority (default true)
+	HighLoadThreshold  int     `json:"highLoadThreshold"`           // High load threshold for priority boost (default 10)
+	PriorityBoost      int     `json:"priorityBoost"`               // Priority boost amount when high load (default 20)
+	AutoscalerEnabled  *string `json:"autoscalerEnabled,omitempty"` // Autoscaler override: nil/"" = follow global, "disabled" = force off, "enabled" = force on
 
 	// Auto-scaling runtime state
 	LastScaleTime    time.Time `json:"lastScaleTime,omitempty"`    // Last scaling time

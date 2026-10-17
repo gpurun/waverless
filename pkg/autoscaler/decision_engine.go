@@ -76,95 +76,117 @@ func (e *DecisionEngine) identifyScaleUp(ctx context.Context, endpoints []*Endpo
 	return approvedDecisions
 }
 
-// shouldScaleUp determines whether to scale up
+// shouldScaleUp determines whether to scale up.
+// Trigger (OR): pendingCount >= scaleUpThreshold OR (waitAgeKnown && oldestPendingAge >= scaleUpWaitSeconds)
+// Gates (AND): currentDesired < maxReplicas, not in cooldown, resources/quota (external pools use unlimited).
 func (e *DecisionEngine) shouldScaleUp(ctx context.Context, ep *EndpointConfig, availableResources *Resources) *ScaleDecision {
-	// 1. Check basic conditions
-	// 🔥 FIX: Use Replicas (desired) instead of ActualReplicas (ready) to avoid duplicate scale-up
-	// When pods are starting, ReadyReplicas=0 but Replicas may already be set to N
 	currentReplicas := ep.Replicas
 	if currentReplicas >= ep.MaxReplicas {
 		logger.DebugCtx(ctx, "endpoint %s: skip scale up, already at max replicas (current=%d, max=%d)",
 			ep.Name, currentReplicas, ep.MaxReplicas)
-		return nil // Already at max replicas
+		return nil
 	}
 
-	// 2. Check cooldown time (check first to avoid frequent scaling)
 	if !ep.LastScaleTime.IsZero() {
 		cooldown := time.Duration(ep.ScaleUpCooldown) * time.Second
 		elapsed := time.Since(ep.LastScaleTime)
 		if elapsed < cooldown {
 			logger.DebugCtx(ctx, "endpoint %s: skip scale up, still in cooldown (elapsed=%.0fs, cooldown=%ds)",
 				ep.Name, elapsed.Seconds(), ep.ScaleUpCooldown)
-			return nil // Still in cooldown period
+			return nil
 		}
 	}
 
-	// 3. Calculate total tasks and target replicas
-	// Strategy: assume each worker handles 1 concurrent task
-	// Consider both running and queued tasks
+	// Pending unknown: do not treat queue as empty for scale-up; be conservative.
+	if !ep.PendingKnown {
+		logger.WarnCtx(ctx, "endpoint %s: pending metrics unknown; skip scale-up to avoid blind expansion", ep.Name)
+		return nil
+	}
+
+	pending := ep.PendingTasks
 	totalTasks := ep.PendingTasks + ep.RunningTasks
 	targetReplicas := int(math.Ceil(float64(totalTasks)))
 
-	// 🔍 DEBUG: Log detailed scale-up decision calculation
-	logger.InfoCtx(ctx, "endpoint %s: scale-up calculation - pending=%d, running=%d, totalTasks=%d, currentReplicas(desired)=%d, actualReplicas(ready)=%d, targetReplicas(calculated)=%d",
-		ep.Name, ep.PendingTasks, ep.RunningTasks, totalTasks, currentReplicas, ep.ActualReplicas, targetReplicas)
+	byQueue := pending >= int64(ep.ScaleUpThreshold)
 
-	// 🔥 CRITICAL FIX: If calculated target replicas <= current replicas, capacity is sufficient, no scale-up needed
-	// This avoids repeated scale-up triggers during Pod startup
+	var oldestAge time.Duration
+	ageOK := !ep.OldestPendingSince.IsZero() && pending > 0
+	if ageOK {
+		oldestAge = time.Since(ep.OldestPendingSince)
+	}
+	waitThreshold := ep.ScaleUpWaitSeconds
+	if waitThreshold <= 0 && e.config != nil {
+		waitThreshold = e.config.ScaleUpWaitSeconds
+	}
+	byWait := ageOK && waitThreshold > 0 && oldestAge >= time.Duration(waitThreshold)*time.Second
+
+	logger.InfoCtx(ctx, "endpoint %s: scale-up calculation - pending=%d, running=%d, ageOK=%v, oldestAge=%.0fs, waitThreshold=%ds, byQueue=%v, byWait=%v, current=%d",
+		ep.Name, pending, ep.RunningTasks, ageOK, oldestAge.Seconds(), waitThreshold, byQueue, byWait, currentReplicas)
+
+	if !byQueue && !byWait {
+		// Still allow wake from zero when pending meets threshold handled above;
+		// also respect MinReplicas fill when below min and there is work — keep legacy min fill below.
+		if !(currentReplicas < ep.MinReplicas && pending > 0) {
+			logger.DebugCtx(ctx, "endpoint %s: skip scale up, neither queue nor wait-age triggered", ep.Name)
+			return nil
+		}
+	}
+
 	if targetReplicas <= currentReplicas {
-		logger.DebugCtx(ctx, "endpoint %s: skip scale up, capacity is sufficient (target=%d <= current=%d)",
-			ep.Name, targetReplicas, currentReplicas)
-		return nil
+		if byWait {
+			// Single long-waiting task: wake at least Desired+1 (or max(Min,1))
+			wake := currentReplicas + 1
+			if wake < ep.MinReplicas {
+				wake = ep.MinReplicas
+			}
+			if wake < 1 {
+				wake = 1
+			}
+			targetReplicas = wake
+		} else if currentReplicas < ep.MinReplicas {
+			targetReplicas = ep.MinReplicas
+		} else {
+			logger.DebugCtx(ctx, "endpoint %s: skip scale up, capacity sufficient (target=%d <= current=%d)",
+				ep.Name, targetReplicas, currentReplicas)
+			return nil
+		}
 	}
 
-	// 4. Check if pending tasks reach scale-up threshold (only needed when scaling from 0)
-	// If replicas are already running, consider scaling up whenever there are queued tasks
-	if currentReplicas == 0 && ep.PendingTasks < int64(ep.ScaleUpThreshold) {
-		logger.DebugCtx(ctx, "endpoint %s: skip scale up, pending tasks below threshold for zero replicas (pending=%d, threshold=%d)",
-			ep.Name, ep.PendingTasks, ep.ScaleUpThreshold)
-		return nil
-	}
-
-	// 5. Limit to maxReplicas
 	if targetReplicas > ep.MaxReplicas {
 		targetReplicas = ep.MaxReplicas
 	}
-
-	// 6. Ensure scaling to at least MinReplicas (if configured)
 	if currentReplicas < ep.MinReplicas && targetReplicas < ep.MinReplicas {
 		targetReplicas = ep.MinReplicas
-		logger.InfoCtx(ctx, "endpoint %s: adjusting target to meet MinReplicas requirement (current=%d, min=%d, target=%d)",
-			ep.Name, currentReplicas, ep.MinReplicas, targetReplicas)
 	}
 
 	scaleAmount := targetReplicas - currentReplicas
-	logger.InfoCtx(ctx, "endpoint %s: final scale decision - targetReplicas=%d, scaleAmount=%d",
-		ep.Name, targetReplicas, scaleAmount)
-
 	if scaleAmount <= 0 {
-		logger.DebugCtx(ctx, "endpoint %s: no scale needed (target=%d <= current=%d)",
-			ep.Name, targetReplicas, currentReplicas)
 		return nil
 	}
 
-	// 4. Calculate required resources
 	requiredResources, err := e.resourceCalculator.CalculateEndpointResource(ctx, ep, scaleAmount)
 	if err != nil {
 		logger.ErrorCtx(ctx, "failed to calculate resources for %s: %v", ep.Name, err)
 		return nil
 	}
 
-	// 5. Check if resources are sufficient
 	effectivePriority := ep.EffectivePriority(e.config.StarvationTime)
 	blocked := !availableResources.CanAllocate(requiredResources)
 
+	reason := "queue"
+	if byWait && !byQueue {
+		reason = "wait-age"
+	} else if byWait && byQueue {
+		reason = "queue+wait-age"
+	}
+	reasonDetail := fmt.Sprintf("%s: pending=%d threshold=%d oldestAge=%.0fs waitThreshold=%ds",
+		reason, pending, ep.ScaleUpThreshold, oldestAge.Seconds(), waitThreshold)
+
 	if blocked {
-		logger.InfoCtx(ctx, "endpoint %s: scale up blocked due to insufficient resources (required: GPU=%d, CPU=%.1f, Mem=%.1fGB, available: GPU=%d, CPU=%.1f, Mem=%.1fGB)",
-			ep.Name, requiredResources.GPUCount, requiredResources.CPUCores, requiredResources.MemoryGB,
-			availableResources.GPUCount, availableResources.CPUCores, availableResources.MemoryGB)
+		logger.InfoCtx(ctx, "endpoint %s: scale up blocked due to insufficient resources", ep.Name)
 	} else {
-		logger.InfoCtx(ctx, "endpoint %s: planning scale up from %d to %d replicas (pending=%d, running=%d, ready=%d, priority=%d)",
-			ep.Name, currentReplicas, targetReplicas, ep.PendingTasks, ep.RunningTasks, ep.ActualReplicas, effectivePriority)
+		logger.InfoCtx(ctx, "endpoint %s: planning scale up from %d to %d replicas (%s)",
+			ep.Name, currentReplicas, targetReplicas, reasonDetail)
 	}
 
 	decision := &ScaleDecision{
@@ -175,16 +197,14 @@ func (e *DecisionEngine) shouldScaleUp(ctx context.Context, ep *EndpointConfig, 
 		Priority:         effectivePriority,
 		BasePriority:     ep.Priority,
 		QueueLength:      ep.PendingTasks,
-		Reason:           fmt.Sprintf("queue length %d exceeds threshold %d", ep.PendingTasks, ep.ScaleUpThreshold),
+		Reason:           reasonDetail,
 		Approved:         !blocked,
 		Blocked:          blocked,
 		RequiredResource: *requiredResources,
 	}
-
 	if blocked {
 		decision.BlockedReason = "insufficient cluster resources"
 	}
-
 	return decision
 }
 

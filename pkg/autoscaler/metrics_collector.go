@@ -144,13 +144,19 @@ func (c *MetricsCollector) collectSingleEndpoint(ctx context.Context, ep *interf
 		config.Conditions = snapshot.Conditions
 	}
 
-	// Get pending task count (from MySQL)
+	// ScaleUpWaitSeconds: endpoint override, else leave 0 (decision engine may use global default)
+	config.ScaleUpWaitSeconds = ep.ScaleUpWaitSeconds
+
+	// Get pending task count (from MySQL). On failure mark PendingKnown=false so we do not treat queue as empty.
 	pendingCount, err := c.taskRepo.CountByEndpointAndStatus(ctx, ep.Name, constants.TaskStatusPending.String())
 	if err != nil {
 		logger.WarnCtx(ctx, "failed to get pending task count for %s: %v", ep.Name, err)
-		pendingCount = 0
+		config.PendingKnown = false
+		config.PendingTasks = 0
+	} else {
+		config.PendingKnown = true
+		config.PendingTasks = pendingCount
 	}
-	config.PendingTasks = pendingCount
 
 	// Get running task count
 	runningCount, err := c.getRunningTaskCount(ctx, ep.Name)
@@ -160,11 +166,22 @@ func (c *MetricsCollector) collectSingleEndpoint(ctx context.Context, ep *interf
 	}
 	config.RunningTasks = runningCount
 
-	// Update FirstPendingTime
-	if pendingCount > 0 && config.FirstPendingTime.IsZero() {
+	// oldestPendingAge from min(created_at) of pending tasks (survives control-plane restart)
+	if config.PendingKnown && pendingCount > 0 {
+		oldest, oerr := c.taskRepo.OldestPendingCreatedAt(ctx, ep.Name)
+		if oerr != nil {
+			logger.WarnCtx(ctx, "failed to get oldest pending created_at for %s: %v", ep.Name, oerr)
+		} else if oldest != nil {
+			config.OldestPendingSince = *oldest
+		}
+	}
+
+	// FirstPendingTime remains observation-only (starvation boost); do NOT use as wait-age
+	if config.PendingKnown && pendingCount > 0 && config.FirstPendingTime.IsZero() {
 		config.FirstPendingTime = time.Now()
-	} else if pendingCount == 0 {
+	} else if config.PendingKnown && pendingCount == 0 {
 		config.FirstPendingTime = time.Time{} // Reset
+		config.OldestPendingSince = time.Time{}
 	}
 
 	return config, nil
