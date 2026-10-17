@@ -1,0 +1,2527 @@
+basePath: /
+definitions:
+  app_handler.DockerHubWebhookPayload:
+    properties:
+      push_data:
+        properties:
+          pushed_at:
+            type: integer
+          pusher:
+            type: string
+          tag:
+            type: string
+        type: object
+      repository:
+        properties:
+          name:
+            type: string
+          namespace:
+            type: string
+          repo_name:
+            type: string
+          status:
+            type: string
+        type: object
+    type: object
+  app_handler.StatusEventResponse:
+    properties:
+      createdAt:
+        type: string
+      endpoint:
+        type: string
+      eventType:
+        type: string
+      id:
+        type: integer
+      message:
+        type: string
+      newStatus:
+        type: string
+      oldStatus:
+        type: string
+      phase:
+        type: string
+      reason:
+        type: string
+      spotStatus:
+        additionalProperties: {}
+        type: object
+      workerId:
+        type: string
+    type: object
+  app_handler.WorkerDetailResponse:
+    properties:
+      concurrency:
+        type: integer
+      createdAt:
+        type: string
+      currentJobs:
+        type: integer
+      endpoint:
+        type: string
+      failureOccurredAt:
+        description: Timestamp when failure was detected
+        type: string
+      failureReason:
+        description: Sanitized user-friendly failure message
+        type: string
+      failureSuggestion:
+        description: Actionable suggestion for the user
+        type: string
+      failureType:
+        description: Failure information fields (Requirements 6.1, 6.2)
+        type: string
+      id:
+        type: integer
+      lastHeartbeat:
+        type: string
+      pendingMessage:
+        description: Detailed message about pending state
+        type: string
+      pendingPhase:
+        description: Pending phase information fields (Requirements 1.5, 2.4)
+        type: string
+      pendingPhaseSince:
+        description: Timestamp when current pending phase started
+        type: string
+      pendingReason:
+        description: Reason for pending state
+        type: string
+      podName:
+        type: string
+      podStartedAt:
+        type: string
+      spotInstanceType:
+        description: Spot instance type (e.g., "g4dn.xlarge")
+        type: string
+      spotPrice:
+        description: Spot instance cost tracking
+        type: number
+      status:
+        type: string
+      terminatedAt:
+        type: string
+      totalExecutionTimeMs:
+        type: integer
+      totalTasksCompleted:
+        type: integer
+      totalTasksFailed:
+        type: integer
+      updatedAt:
+        type: string
+      version:
+        type: string
+      workerId:
+        type: string
+    type: object
+  app_handler.WorkerWithPodInfo:
+    properties:
+      concurrency:
+        description: Maximum concurrency
+        type: integer
+      current_jobs:
+        description: Current number of jobs
+        type: integer
+      deletionTimestamp:
+        description: Set when pod is terminating
+        type: string
+      endpoint:
+        description: Endpoint to which the worker belongs
+        type: string
+      failureReason:
+        description: Sanitized user-friendly failure message
+        type: string
+      failureSuggestion:
+        description: Actionable suggestion for the user
+        type: string
+      failureType:
+        description: Failure information fields (Requirements 6.1, 6.2)
+        type: string
+      id:
+        type: string
+      jobs_in_progress:
+        description: List of in-progress task IDs
+        items:
+          type: string
+        type: array
+      last_heartbeat:
+        type: string
+      last_task_time:
+        description: Last time a task was completed (for idle tracking)
+        type: string
+      pendingMessage:
+        description: Detailed message about pending state
+        type: string
+      pendingPhase:
+        description: Pending phase information fields (Requirements 1.5, 2.4)
+        type: string
+      pendingPhaseSince:
+        description: Timestamp when current pending phase started
+        type: string
+      pendingReason:
+        description: Reason for pending state
+        type: string
+      pod_name:
+        description: K8s pod name (from RUNPOD_POD_ID env)
+        type: string
+      podCreatedAt:
+        description: Pod creation time
+        type: string
+      podIP:
+        description: Pod IP
+        type: string
+      podMessage:
+        description: Status message
+        type: string
+      podNodeName:
+        description: Node name
+        type: string
+      podPhase:
+        description: 'Pod phase: Pending, Running, Succeeded, Failed'
+        type: string
+      podReason:
+        description: Status reason
+        type: string
+      podRestartCount:
+        description: Container restart count
+        type: integer
+      podStartedAt:
+        description: Pod start time
+        type: string
+      podStatus:
+        description: 'Detailed status: Creating, Running, Terminating, etc.'
+        type: string
+      registered_at:
+        type: string
+      spotInstanceType:
+        description: Spot instance type (e.g., "g4dn.xlarge")
+        type: string
+      spotPrice:
+        description: Spot instance cost tracking
+        type: number
+      status:
+        $ref: '#/definitions/waverless_internal_model.WorkerStatus'
+      version:
+        type: string
+    type: object
+  waverless_internal_model.JobInfo:
+    properties:
+      id:
+        type: string
+      input:
+        additionalProperties: true
+        type: object
+    type: object
+  waverless_internal_model.JobResultRequest:
+    properties:
+      error:
+        type: string
+      output:
+        additionalProperties: true
+        type: object
+      stopPod:
+        description: Consistent with runpod
+        type: boolean
+      task_id:
+        description: TaskID can be passed via JSON body or X-Request-ID header
+        type: string
+    type: object
+  waverless_internal_model.SubmitRequest:
+    properties:
+      endpoint:
+        description: Specify endpoint, internal use
+        type: string
+      input:
+        additionalProperties: true
+        type: object
+      webhook:
+        type: string
+    required:
+    - input
+    type: object
+  waverless_internal_model.SubmitResponse:
+    properties:
+      id:
+        type: string
+      status:
+        $ref: '#/definitions/waverless_internal_model.TaskStatus'
+    type: object
+  waverless_internal_model.TaskResponse:
+    properties:
+      createdAt:
+        description: Task creation time (ISO 8601 format)
+        type: string
+      delayTime:
+        description: Processing delay in milliseconds
+        type: integer
+      endpoint:
+        description: Endpoint name
+        type: string
+      error:
+        type: string
+      executionTime:
+        description: Execution time in milliseconds
+        type: integer
+      id:
+        type: string
+      input:
+        additionalProperties: true
+        type: object
+      output:
+        additionalProperties: true
+        type: object
+      status:
+        type: string
+      workerId:
+        type: string
+    type: object
+  waverless_internal_model.TaskStatus:
+    enum:
+    - PENDING
+    - IN_PROGRESS
+    - COMPLETED
+    - FAILED
+    - CANCELLED
+    type: string
+    x-enum-comments:
+      TaskStatusCancelled: Cancelled
+      TaskStatusCompleted: Completed
+      TaskStatusFailed: Failed
+      TaskStatusInProgress: In Progress
+      TaskStatusPending: Pending
+    x-enum-varnames:
+    - TaskStatusPending
+    - TaskStatusInProgress
+    - TaskStatusCompleted
+    - TaskStatusFailed
+    - TaskStatusCancelled
+  waverless_internal_model.WorkerStatus:
+    enum:
+    - STARTING
+    - ONLINE
+    - OFFLINE
+    - BUSY
+    - DRAINING
+    type: string
+    x-enum-comments:
+      WorkerStatusBusy: Busy - processing tasks
+      WorkerStatusDraining: Draining - pod terminating, no new tasks
+      WorkerStatusOffline: Offline - disconnected
+      WorkerStatusOnline: Online - normal operation
+      WorkerStatusStarting: Starting - pod created, waiting for heartbeat
+    x-enum-varnames:
+    - WorkerStatusStarting
+    - WorkerStatusOnline
+    - WorkerStatusOffline
+    - WorkerStatusBusy
+    - WorkerStatusDraining
+  waverless_pkg_autoscaler.AutoScalerStatus:
+    properties:
+      blockedEndpoints:
+        items:
+          type: string
+        type: array
+      clusterResources:
+        $ref: '#/definitions/waverless_pkg_autoscaler.ClusterResources'
+      enabled:
+        type: boolean
+      endpoints:
+        items:
+          $ref: '#/definitions/waverless_pkg_autoscaler.EndpointStatus'
+        type: array
+      lastRunTime:
+        type: string
+      metrics:
+        additionalProperties: true
+        type: object
+      pendingDecisions:
+        items:
+          $ref: '#/definitions/waverless_pkg_autoscaler.ScaleDecision'
+        type: array
+      recentEvents:
+        items:
+          $ref: '#/definitions/waverless_pkg_autoscaler.ScalingEvent'
+        type: array
+      running:
+        type: boolean
+      starvingEndpoints:
+        items:
+          type: string
+        type: array
+    type: object
+  waverless_pkg_autoscaler.ClusterResources:
+    properties:
+      available:
+        allOf:
+        - $ref: '#/definitions/waverless_pkg_autoscaler.Resources'
+        description: Available resources
+      bySpec:
+        additionalProperties:
+          $ref: '#/definitions/waverless_pkg_autoscaler.Resources'
+        description: Resources by spec type
+        type: object
+      total:
+        allOf:
+        - $ref: '#/definitions/waverless_pkg_autoscaler.Resources'
+        description: Total resources
+      used:
+        allOf:
+        - $ref: '#/definitions/waverless_pkg_autoscaler.Resources'
+        description: Used resources
+    type: object
+  waverless_pkg_autoscaler.Config:
+    properties:
+      enabled:
+        description: Whether autoscaling is enabled
+        type: boolean
+      interval:
+        description: Control loop interval (seconds)
+        type: integer
+      maxCpuCores:
+        description: Total cluster CPU cores
+        type: integer
+      maxGpuCount:
+        description: Total cluster GPU count
+        type: integer
+      maxMemoryGB:
+        description: Total cluster memory (GB)
+        type: integer
+      starvationTime:
+        description: Starvation threshold (seconds), temporarily elevate priority
+          if no resources allocated beyond this time
+        type: integer
+    type: object
+  waverless_pkg_autoscaler.EndpointStatus:
+    properties:
+      currentReplicas:
+        type: integer
+      desiredReplicas:
+        type: integer
+      drainingReplicas:
+        type: integer
+      effectivePrio:
+        type: integer
+      enabled:
+        type: boolean
+      idleTime:
+        description: Seconds
+        type: number
+      lastScaleTime:
+        type: string
+      lastTaskTime:
+        type: string
+      maxReplicas:
+        type: integer
+      minReplicas:
+        type: integer
+      name:
+        type: string
+      pendingTasks:
+        type: integer
+      priority:
+        type: integer
+      resourceUsage:
+        $ref: '#/definitions/waverless_pkg_autoscaler.Resources'
+      runningTasks:
+        type: integer
+      waitingTime:
+        type: number
+    type: object
+  waverless_pkg_autoscaler.Resources:
+    properties:
+      cpuCores:
+        type: number
+      gpuCount:
+        type: integer
+      memoryGB:
+        type: number
+    type: object
+  waverless_pkg_autoscaler.ScaleDecision:
+    properties:
+      approved:
+        type: boolean
+      basePriority:
+        type: integer
+      blocked:
+        type: boolean
+      blockedReason:
+        type: string
+      currentReplicas:
+        type: integer
+      desiredReplicas:
+        type: integer
+      endpoint:
+        type: string
+      preemptedFrom:
+        description: Endpoints from which resources were preempted
+        items:
+          type: string
+        type: array
+      priority:
+        description: Effective priority (including dynamic adjustments)
+        type: integer
+      queueLength:
+        type: integer
+      reason:
+        type: string
+      requiredResource:
+        allOf:
+        - $ref: '#/definitions/waverless_pkg_autoscaler.Resources'
+        description: Required resources
+      scaleAmount:
+        description: Positive for scale up, negative for scale down
+        type: integer
+    type: object
+  waverless_pkg_autoscaler.ScalingEvent:
+    properties:
+      action:
+        description: '"scale_up", "scale_down", "blocked", "preempted"'
+        type: string
+      endpoint:
+        type: string
+      fromReplicas:
+        type: integer
+      id:
+        type: string
+      preemptedFrom:
+        items:
+          type: string
+        type: array
+      priority:
+        type: integer
+      queueLength:
+        type: integer
+      reason:
+        type: string
+      timestamp:
+        type: string
+      toReplicas:
+        type: integer
+    type: object
+  waverless_pkg_interfaces.CapacityEvent:
+    properties:
+      reason:
+        type: string
+      specName:
+        type: string
+      status:
+        $ref: '#/definitions/waverless_pkg_interfaces.CapacityStatus'
+      updatedAt:
+        type: string
+    type: object
+  waverless_pkg_interfaces.CapacityStatus:
+    enum:
+    - available
+    - limited
+    - sold_out
+    type: string
+    x-enum-varnames:
+    - CapacityAvailable
+    - CapacityLimited
+    - CapacitySoldOut
+  waverless_pkg_interfaces.ContainerInfo:
+    properties:
+      env:
+        items:
+          $ref: '#/definitions/waverless_pkg_interfaces.EnvVar'
+        type: array
+      exitCode:
+        type: integer
+      finishedAt:
+        type: string
+      image:
+        type: string
+      message:
+        type: string
+      name:
+        type: string
+      ports:
+        items:
+          $ref: '#/definitions/waverless_pkg_interfaces.ContainerPort'
+        type: array
+      ready:
+        type: boolean
+      reason:
+        type: string
+      resources:
+        additionalProperties: true
+        type: object
+      restartCount:
+        type: integer
+      startedAt:
+        type: string
+      state:
+        description: Waiting, Running, Terminated
+        type: string
+    type: object
+  waverless_pkg_interfaces.ContainerPort:
+    properties:
+      containerPort:
+        type: integer
+      name:
+        type: string
+      protocol:
+        type: string
+    type: object
+  waverless_pkg_interfaces.CreateSpecRequest:
+    properties:
+      category:
+        description: cpu, gpu
+        type: string
+      displayName:
+        type: string
+      name:
+        type: string
+      platforms:
+        additionalProperties: true
+        type: object
+      resourceType:
+        description: fixed, serverless
+        type: string
+      resources:
+        $ref: '#/definitions/waverless_pkg_interfaces.ResourceRequirements'
+    required:
+    - category
+    - displayName
+    - name
+    - resourceType
+    - resources
+    type: object
+  waverless_pkg_interfaces.EndpointMetadata:
+    properties:
+      activeWorkerCount:
+        description: Active Worker count
+        type: integer
+      autoscalerEnabled:
+        description: 'Autoscaler override: nil/"" = follow global, "disabled" = force
+          off, "enabled" = force on'
+        type: string
+      availableReplicas:
+        description: Available replicas
+        type: integer
+      completedTasks:
+        description: Completed tasks
+        type: integer
+      createdAt:
+        description: Timestamps
+        type: string
+      description:
+        description: Description
+        type: string
+      displayName:
+        description: Display name
+        type: string
+      enableDynamicPrio:
+        description: Enable dynamic priority (default true)
+        type: boolean
+      enablePtrace:
+        description: Enable SYS_PTRACE capability for debugging (only for fixed resource
+          pools)
+        type: boolean
+      env:
+        additionalProperties:
+          type: string
+        description: Configuration information
+        type: object
+      failedTasks:
+        description: Failed tasks
+        type: integer
+      firstPendingTime:
+        description: First pending task time (for starvation detection)
+        type: string
+      gpuCount:
+        description: GPU count per replica (resources = per-gpu-config * gpuCount)
+        type: integer
+      healthMessage:
+        description: User-friendly health message
+        type: string
+      healthStatus:
+        description: Health status (for image validation and status transparency feature)
+        type: string
+      highLoadThreshold:
+        description: High load threshold for priority boost (default 10)
+        type: integer
+      image:
+        description: Docker image
+        type: string
+      imageDigest:
+        description: Current image digest from DockerHub
+        type: string
+      imageLastChecked:
+        description: Last time image was checked for updates
+        type: string
+      imagePrefix:
+        description: Image prefix for matching updates (e.g., "wavespeed/model-deploy:wan_i2v-default-")
+        type: string
+      labels:
+        additionalProperties:
+          type: string
+        description: Labels
+        type: object
+      lastHealthCheckAt:
+        description: Last health check timestamp
+        type: string
+      lastScaleTime:
+        description: Auto-scaling runtime state
+        type: string
+      lastTaskTime:
+        description: Last task processing time
+        type: string
+      latestImage:
+        description: Latest available image if update is available
+        type: string
+      maxPendingTasks:
+        description: Maximum allowed pending tasks before warning clients (default
+          1)
+        type: integer
+      maxReplicas:
+        description: Maximum replica count
+        type: integer
+      minReplicas:
+        description: Auto-scaling configuration
+        type: integer
+      name:
+        description: Basic information
+        type: string
+      namespace:
+        description: K8s namespace
+        type: string
+      pendingTasks:
+        description: Real-time metrics (populated dynamically by /api/v1/k8s/apps,
+          not persisted)
+        type: integer
+      priority:
+        description: Priority for resource allocation (0-100, default 50)
+        type: integer
+      priorityBoost:
+        description: Priority boost amount when high load (default 20)
+        type: integer
+      readyReplicas:
+        description: Ready replicas
+        type: integer
+      replicas:
+        description: Replica count
+        type: integer
+      runningTasks:
+        description: Current running tasks
+        type: integer
+      scaleDownCooldown:
+        description: Scale down cooldown in seconds (default 60)
+        type: integer
+      scaleDownIdleTime:
+        description: Idle time in seconds before scale down (default 300)
+        type: integer
+      scaleUpCooldown:
+        description: Scale up cooldown in seconds (default 30)
+        type: integer
+      scaleUpThreshold:
+        description: Queue threshold for scale up (default 1)
+        type: integer
+      shmSize:
+        description: Storage configuration (backfilled from K8s deployment)
+        type: string
+      specName:
+        description: Deployment information
+        type: string
+      status:
+        description: Status information
+        type: string
+      statusSummary:
+        additionalProperties: {}
+        description: |-
+          Status Summary (for endpoint status tracking feature)
+          Contains aggregated worker status information including pending phases and failures
+        type: object
+      taskTimeout:
+        description: Task execution timeout in seconds (0 = use global default)
+        type: integer
+      totalTasks:
+        description: Task statistics
+        type: integer
+      updatedAt:
+        type: string
+      volumeMounts:
+        description: PVC volume mounts from deployment
+        items:
+          $ref: '#/definitions/waverless_pkg_interfaces.VolumeMount'
+        type: array
+      workerCount:
+        description: Worker information
+        type: integer
+    type: object
+  waverless_pkg_interfaces.EnvVar:
+    properties:
+      name:
+        type: string
+      value:
+        type: string
+    type: object
+  waverless_pkg_interfaces.OwnerReference:
+    properties:
+      kind:
+        type: string
+      name:
+        type: string
+      uid:
+        type: string
+    type: object
+  waverless_pkg_interfaces.PVCInfo:
+    properties:
+      accessModes:
+        description: e.g., "ReadWriteOnce"
+        type: string
+      capacity:
+        description: Storage capacity (e.g., "100Gi")
+        type: string
+      createdAt:
+        type: string
+      name:
+        type: string
+      namespace:
+        type: string
+      status:
+        description: Bound, Pending, Lost
+        type: string
+      storageClass:
+        description: Storage class name
+        type: string
+      volume:
+        description: Bound volume name
+        type: string
+    type: object
+  waverless_pkg_interfaces.PodCondition:
+    properties:
+      lastTransitionTime:
+        type: string
+      message:
+        type: string
+      reason:
+        type: string
+      status:
+        type: string
+      type:
+        type: string
+    type: object
+  waverless_pkg_interfaces.PodDetail:
+    properties:
+      affinity:
+        additionalProperties: true
+        type: object
+      annotations:
+        additionalProperties:
+          type: string
+        type: object
+      conditions:
+        items:
+          $ref: '#/definitions/waverless_pkg_interfaces.PodCondition'
+        type: array
+      containers:
+        items:
+          $ref: '#/definitions/waverless_pkg_interfaces.ContainerInfo'
+        type: array
+      createdAt:
+        type: string
+      deletionTimestamp:
+        description: Set when pod is terminating
+        type: string
+      events:
+        items:
+          $ref: '#/definitions/waverless_pkg_interfaces.PodEvent'
+        type: array
+      initContainers:
+        items:
+          $ref: '#/definitions/waverless_pkg_interfaces.ContainerInfo'
+        type: array
+      ip:
+        type: string
+      labels:
+        additionalProperties:
+          type: string
+        type: object
+      message:
+        description: Detailed status message
+        type: string
+      name:
+        type: string
+      namespace:
+        type: string
+      nodeName:
+        type: string
+      ownerReferences:
+        items:
+          $ref: '#/definitions/waverless_pkg_interfaces.OwnerReference'
+        type: array
+      phase:
+        description: Pending, Running, Succeeded, Failed, Unknown
+        type: string
+      readyAt:
+        description: Time when worker became ready (from provider API)
+        type: string
+      reason:
+        description: Why in this status
+        type: string
+      restartCount:
+        type: integer
+      startedAt:
+        type: string
+      status:
+        description: Creating, Running, Terminating, Failed, etc.
+        type: string
+      tolerations:
+        items:
+          additionalProperties:
+            type: string
+          type: object
+        type: array
+      uid:
+        type: string
+      volumes:
+        items:
+          $ref: '#/definitions/waverless_pkg_interfaces.VolumeInfo'
+        type: array
+      workerID:
+        description: Matched worker ID from Redis
+        type: string
+    type: object
+  waverless_pkg_interfaces.PodEvent:
+    properties:
+      count:
+        type: integer
+      firstSeen:
+        type: string
+      lastSeen:
+        type: string
+      message:
+        type: string
+      reason:
+        type: string
+      type:
+        description: Normal, Warning
+        type: string
+    type: object
+  waverless_pkg_interfaces.ResourceRequirements:
+    properties:
+      cpu:
+        type: string
+      ephemeralStorage:
+        type: string
+      gpu:
+        type: string
+      gpuType:
+        type: string
+      memory:
+        type: string
+      shmSize:
+        description: Shared memory size (e.g., "1Gi", "512Mi")
+        type: string
+    type: object
+  waverless_pkg_interfaces.SpecInfo:
+    properties:
+      category:
+        type: string
+      displayName:
+        type: string
+      name:
+        type: string
+      platforms:
+        additionalProperties: true
+        type: object
+      resourceType:
+        description: fixed, serverless
+        type: string
+      resources:
+        $ref: '#/definitions/waverless_pkg_interfaces.ResourceRequirements'
+    type: object
+  waverless_pkg_interfaces.SpecWithCapacity:
+    properties:
+      capacity:
+        $ref: '#/definitions/waverless_pkg_interfaces.CapacityStatus'
+      category:
+        type: string
+      displayName:
+        type: string
+      name:
+        type: string
+      pendingCount:
+        type: integer
+      platforms:
+        additionalProperties: true
+        type: object
+      resourceType:
+        description: fixed, serverless
+        type: string
+      resources:
+        $ref: '#/definitions/waverless_pkg_interfaces.ResourceRequirements'
+      runningCount:
+        type: integer
+      spotPrice:
+        type: number
+      spotScore:
+        type: integer
+    type: object
+  waverless_pkg_interfaces.UpdateDeploymentRequest:
+    properties:
+      enablePtrace:
+        description: Enable SYS_PTRACE capability (optional, use pointer to distinguish
+          false from unset)
+        type: boolean
+      endpoint:
+        description: Application name (required)
+        type: string
+      env:
+        additionalProperties:
+          type: string
+        description: New environment variables (optional, use pointer to distinguish
+          empty from unset)
+        type: object
+      image:
+        description: New docker image (optional)
+        type: string
+      replicas:
+        description: New replica count (optional, use pointer to distinguish 0 from
+          unset)
+        type: integer
+      shmSize:
+        description: New shared memory size (optional, use pointer to distinguish
+          empty from unset)
+        type: string
+      specName:
+        description: New spec name (optional)
+        type: string
+      taskTimeout:
+        description: New task timeout (optional)
+        type: integer
+      volumeMounts:
+        description: New volume mounts (optional, use pointer to distinguish empty
+          from unset)
+        items:
+          $ref: '#/definitions/waverless_pkg_interfaces.VolumeMount'
+        type: array
+    type: object
+  waverless_pkg_interfaces.UpdateEndpointConfigRequest:
+    properties:
+      autoscalerEnabled:
+        description: 'Autoscaler override: "" = default, "disabled" = off, "enabled"
+          = on'
+        type: string
+      description:
+        description: Description
+        type: string
+      displayName:
+        description: Basic metadata
+        type: string
+      enableDynamicPrio:
+        description: Enable dynamic priority
+        type: boolean
+      highLoadThreshold:
+        description: High load threshold for priority boost
+        type: integer
+      imagePrefix:
+        description: Image prefix for matching updates
+        type: string
+      maxPendingTasks:
+        description: Maximum allowed pending tasks before warning clients
+        type: integer
+      maxReplicas:
+        description: Maximum replicas
+        type: integer
+      minReplicas:
+        description: Autoscaling configuration
+        type: integer
+      priority:
+        description: Priority (0-100, 0 = best-effort)
+        type: integer
+      priorityBoost:
+        description: Priority boost amount (0 = no boost)
+        type: integer
+      scaleDownCooldown:
+        description: Scale down cooldown (seconds, 0 = no cooldown)
+        type: integer
+      scaleDownIdleTime:
+        description: Idle time before scale down (seconds)
+        type: integer
+      scaleUpCooldown:
+        description: Scale up cooldown (seconds, 0 = no cooldown)
+        type: integer
+      scaleUpThreshold:
+        description: Queue threshold for scale up
+        type: integer
+      taskTimeout:
+        description: Task timeout in seconds
+        type: integer
+    type: object
+  waverless_pkg_interfaces.UpdateSpecRequest:
+    properties:
+      category:
+        type: string
+      displayName:
+        type: string
+      platforms:
+        additionalProperties: true
+        type: object
+      resourceType:
+        description: fixed, serverless
+        type: string
+      resources:
+        $ref: '#/definitions/waverless_pkg_interfaces.ResourceRequirements'
+      status:
+        description: active, inactive, deprecated
+        type: string
+    type: object
+  waverless_pkg_interfaces.VolumeInfo:
+    properties:
+      name:
+        type: string
+      source:
+        additionalProperties: true
+        type: object
+      type:
+        type: string
+    type: object
+  waverless_pkg_interfaces.VolumeMount:
+    properties:
+      mountPath:
+        description: Mount path in container
+        type: string
+      pvcName:
+        description: PVC name
+        type: string
+    type: object
+  waverless_pkg_provider_k8s.DeployAppRequest:
+    properties:
+      enableDynamicPrio:
+        description: Enable dynamic priority (default true)
+        type: boolean
+      enablePtrace:
+        description: Enable SYS_PTRACE capability for debugging (only for fixed resource
+          pools)
+        type: boolean
+      endpoint:
+        description: Core variables (user input)
+        type: string
+      env:
+        additionalProperties:
+          type: string
+        description: Custom environment variables
+        type: object
+      gpuCount:
+        description: GPU count (1-N, resources = per-gpu-config * gpuCount)
+        type: integer
+      highLoadThreshold:
+        description: High load threshold for priority boost (default 10)
+        type: integer
+      image:
+        description: Image
+        type: string
+      imagePrefix:
+        description: Image prefix for matching updates (e.g., "wavespeed/model-deploy:wan_i2v-default-")
+        type: string
+      maxPendingTasks:
+        description: Maximum allowed pending tasks before warning clients (default
+          1)
+        type: integer
+      maxReplicas:
+        description: Maximum replica count (default 10)
+        type: integer
+      minReplicas:
+        description: Auto-scaling configuration (optional)
+        type: integer
+      priority:
+        description: Priority for resource allocation (0-100, default 50)
+        type: integer
+      priorityBoost:
+        description: Priority boost amount when high load (default 20)
+        type: integer
+      registryCredential:
+        allOf:
+        - $ref: '#/definitions/waverless_pkg_provider_k8s.RegistryCredential'
+        description: Registry credential for private images
+      replicas:
+        description: Replica count (default 1)
+        type: integer
+      scaleDownCooldown:
+        description: Scale down cooldown in seconds (default 60)
+        type: integer
+      scaleDownIdleTime:
+        description: Idle time in seconds before scale down (default 300)
+        type: integer
+      scaleUpCooldown:
+        description: Scale up cooldown in seconds (default 30)
+        type: integer
+      scaleUpThreshold:
+        description: Queue threshold for scale up (default 1)
+        type: integer
+      shmSize:
+        description: Shared memory size (e.g., "1Gi", "512Mi")
+        type: string
+      specName:
+        description: Spec name
+        type: string
+      taskTimeout:
+        description: Task execution timeout in seconds (0 = use global default)
+        type: integer
+      validateImage:
+        description: 'Whether to validate image before deployment (default: true)'
+        type: boolean
+      volumeMounts:
+        description: PVC volume mounts
+        items:
+          $ref: '#/definitions/waverless_pkg_interfaces.VolumeMount'
+        type: array
+    required:
+    - endpoint
+    - image
+    - specName
+    type: object
+  waverless_pkg_provider_k8s.RegistryCredential:
+    properties:
+      password:
+        type: string
+      registry:
+        description: e.g., "docker.io", "ghcr.io"
+        type: string
+      username:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: Waverless Serverless GPU Task Orchestration API
+  title: Waverless API
+  version: "1.0"
+paths:
+  /{endpoint}/check:
+    get:
+      description: Returns whether task submission is recommended based on pending
+        queue depth
+      parameters:
+      - description: Endpoint name
+        in: path
+        name: endpoint
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Check if task submission is recommended
+      tags:
+      - tasks
+  /{endpoint}/runsync:
+    post:
+      consumes:
+      - application/json
+      description: Submit task to specified endpoint and wait for result
+      parameters:
+      - description: Endpoint name
+        in: path
+        name: endpoint
+        required: true
+        type: string
+      - description: Wait timeout in milliseconds (if not set, wait indefinitely)
+        in: query
+        name: wait
+        type: integer
+      - description: Task request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/waverless_internal_model.SubmitRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/waverless_internal_model.TaskResponse'
+      summary: Submit task synchronously to specified endpoint
+      tags:
+      - tasks
+  /{endpoint}/stats:
+    get:
+      description: Get queue status and worker information for specified endpoint
+      parameters:
+      - description: Endpoint name
+        in: path
+        name: endpoint
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get endpoint statistics
+      tags:
+      - tasks
+  /{endpoint}/submit:
+    post:
+      consumes:
+      - application/json
+      description: Submit async task to specified endpoint queue
+      parameters:
+      - description: Endpoint name
+        in: path
+        name: endpoint
+        required: true
+        type: string
+      - description: Task request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/waverless_internal_model.SubmitRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/waverless_internal_model.SubmitResponse'
+      summary: Submit task to specified endpoint
+      tags:
+      - tasks
+  /api/v1/autoscaler/cluster-resources:
+    get:
+      description: Returns only cluster resource usage, without endpoint details and
+        events
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get cluster resource status
+      tags:
+      - AutoScaler
+  /api/v1/autoscaler/config:
+    get:
+      description: Get autoscaler global configuration parameters
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/waverless_pkg_autoscaler.Config'
+      summary: Get global configuration
+      tags:
+      - AutoScaler
+    put:
+      description: Update autoscaler global configuration parameters (interval, max_gpu_count,
+        max_cpu_cores, max_memory_gb, starvation_time)
+      parameters:
+      - description: Global configuration
+        in: body
+        name: config
+        required: true
+        schema:
+          $ref: '#/definitions/waverless_pkg_autoscaler.Config'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Update global configuration
+      tags:
+      - AutoScaler
+  /api/v1/autoscaler/disable:
+    post:
+      description: Disable autoscaling functionality
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Disable autoscaler
+      tags:
+      - AutoScaler
+  /api/v1/autoscaler/enable:
+    post:
+      description: Enable autoscaling functionality
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Enable autoscaler
+      tags:
+      - AutoScaler
+  /api/v1/autoscaler/endpoints:
+    get:
+      description: List autoscaling configurations for all endpoints
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/waverless_pkg_interfaces.EndpointMetadata'
+            type: array
+      summary: List all endpoint configurations
+      tags:
+      - AutoScaler
+  /api/v1/autoscaler/endpoints/{name}:
+    get:
+      description: Get autoscaling configuration for specified endpoint
+      parameters:
+      - description: Endpoint name
+        in: path
+        name: name
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/waverless_pkg_interfaces.EndpointMetadata'
+      summary: Get endpoint autoscaling configuration
+      tags:
+      - AutoScaler
+    put:
+      description: Update autoscaling configuration for specified endpoint
+      parameters:
+      - description: Endpoint name
+        in: path
+        name: name
+        required: true
+        type: string
+      - description: Endpoint configuration
+        in: body
+        name: config
+        required: true
+        schema:
+          $ref: '#/definitions/waverless_pkg_interfaces.EndpointMetadata'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Update endpoint autoscaling configuration
+      tags:
+      - AutoScaler
+  /api/v1/autoscaler/history/{name}:
+    get:
+      description: Get scaling history events for specified endpoint
+      parameters:
+      - description: Endpoint name
+        in: path
+        name: name
+        required: true
+        type: string
+      - description: Limit (default 20)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/waverless_pkg_autoscaler.ScalingEvent'
+            type: array
+      summary: Get scaling history
+      tags:
+      - AutoScaler
+  /api/v1/autoscaler/recent-events:
+    get:
+      description: Get recent scaling events for all endpoints
+      parameters:
+      - description: Event limit (default 10)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/waverless_pkg_autoscaler.ScalingEvent'
+            type: array
+      summary: Get recent scaling events
+      tags:
+      - AutoScaler
+  /api/v1/autoscaler/status:
+    get:
+      description: Get current autoscaler system status, including cluster resources,
+        endpoint status, etc.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/waverless_pkg_autoscaler.AutoScalerStatus'
+      summary: Get autoscaler status
+      tags:
+      - AutoScaler
+  /api/v1/autoscaler/trigger:
+    post:
+      description: Manually trigger one scaling decision and execution
+      parameters:
+      - description: Endpoint name (optional, empty means all)
+        in: path
+        name: name
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Manually trigger scaling
+      tags:
+      - AutoScaler
+  /api/v1/autoscaler/trigger/{name}:
+    post:
+      description: Manually trigger one scaling decision and execution
+      parameters:
+      - description: Endpoint name (optional, empty means all)
+        in: path
+        name: name
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Manually trigger scaling
+      tags:
+      - AutoScaler
+  /api/v1/config/default-env:
+    get:
+      consumes:
+      - application/json
+      description: Get default environment variables from wavespeed-config ConfigMap
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get default environment variables
+      tags:
+      - Config
+  /api/v1/endpoints:
+    get:
+      description: Get all endpoint metadata and enrich with K8s runtime status (if
+        available)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/waverless_pkg_interfaces.EndpointMetadata'
+            type: array
+      summary: List all endpoints (MySQL metadata primary)
+      tags:
+      - Endpoints
+    post:
+      consumes:
+      - application/json
+      description: 'Create a new endpoint: write metadata and trigger K8s deployment'
+      parameters:
+      - description: Deployment configuration
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/waverless_pkg_provider_k8s.DeployAppRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Create endpoint
+      tags:
+      - Endpoints
+  /api/v1/endpoints/{endpoint}/status-events:
+    get:
+      description: Get status events for a specific endpoint with optional filters
+      parameters:
+      - description: Endpoint name
+        in: path
+        name: endpoint
+        required: true
+        type: string
+      - default: 50
+        description: Maximum number of events to return
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Number of events to skip
+        in: query
+        name: offset
+        type: integer
+      - description: Filter events created at or after this time (RFC3339 format)
+        in: query
+        name: start_time
+        type: string
+      - description: Filter events created at or before this time (RFC3339 format)
+        in: query
+        name: end_time
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/app_handler.StatusEventResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List status events for endpoint
+      tags:
+      - Status Events
+  /api/v1/endpoints/{name}:
+    delete:
+      description: Delete specified endpoint (including K8s deployment and metadata)
+      parameters:
+      - description: Endpoint name
+        in: path
+        name: name
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Delete endpoint
+      tags:
+      - Endpoints
+    get:
+      description: Read endpoint metadata from MySQL first, then enrich with K8s runtime
+        status (if available)
+      parameters:
+      - description: Endpoint name
+        in: path
+        name: name
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/waverless_pkg_interfaces.EndpointMetadata'
+      summary: Get endpoint details (metadata primary, enriched with runtime status)
+      tags:
+      - Endpoints
+    put:
+      consumes:
+      - application/json
+      description: Update endpoint metadata and autoscaling config (does not directly
+        modify K8s replicas/image)
+      parameters:
+      - description: Endpoint name
+        in: path
+        name: name
+        required: true
+        type: string
+      - description: Configuration update request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/waverless_pkg_interfaces.UpdateEndpointConfigRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Update endpoint configuration (metadata + autoscaling config)
+      tags:
+      - Endpoints
+  /api/v1/endpoints/{name}/check-image:
+    post:
+      description: Manually check if there's a new image version available for an
+        endpoint
+      parameters:
+      - description: Endpoint name
+        in: path
+        name: name
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Check image update for endpoint
+      tags:
+      - Endpoints
+  /api/v1/endpoints/{name}/deployment:
+    patch:
+      consumes:
+      - application/json
+      description: Update endpoint's K8s deployment, such as upgrading image, adjusting
+        replica count, etc.
+      parameters:
+      - description: Endpoint name
+        in: path
+        name: name
+        required: true
+        type: string
+      - description: Update request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/waverless_pkg_interfaces.UpdateDeploymentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Update endpoint deployment
+      tags:
+      - Endpoints
+  /api/v1/endpoints/{name}/logs:
+    get:
+      description: Get endpoint K8s logs
+      parameters:
+      - description: Endpoint name
+        in: path
+        name: name
+        required: true
+        type: string
+      - default: 100
+        description: Number of log lines
+        in: query
+        name: lines
+        type: integer
+      - description: Pod name (optional, get specific Pod logs if specified)
+        in: query
+        name: pod_name
+        type: string
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+      summary: Get endpoint logs
+      tags:
+      - Endpoints
+  /api/v1/endpoints/{name}/workers:
+    get:
+      description: Get all workers for specified endpoint, including creating, running,
+        and terminating Pods
+      parameters:
+      - description: Endpoint name
+        in: path
+        name: name
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/app_handler.WorkerWithPodInfo'
+            type: array
+      summary: Get endpoint workers (with Pod status)
+      tags:
+      - Endpoints
+  /api/v1/endpoints/{name}/workers/exec:
+    get:
+      description: WebSocket connection to exec into worker pod
+      parameters:
+      - description: Endpoint name
+        in: path
+        name: name
+        required: true
+        type: string
+      - description: Worker ID (Pod Name)
+        in: query
+        name: worker_id
+        required: true
+        type: string
+      responses: {}
+      summary: Worker Pod Exec
+      tags:
+      - Endpoints
+  /api/v1/endpoints/{name}/workers/sync:
+    get:
+      description: Get all workers for specified endpoint including recently terminated
+        OFFLINE workers (for Portal billing sync)
+      parameters:
+      - description: Endpoint name
+        in: path
+        name: name
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/app_handler.WorkerWithPodInfo'
+            type: array
+      summary: Get endpoint workers for sync
+      tags:
+      - Endpoints
+  /api/v1/endpoints/check-images:
+    post:
+      description: Manually check if there are new image versions available for all
+        endpoints
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Check image updates for all endpoints
+      tags:
+      - Endpoints
+  /api/v1/endpoints/preview:
+    post:
+      consumes:
+      - application/json
+      description: Preview K8s deployment YAML for endpoint
+      parameters:
+      - description: Deployment configuration
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/waverless_pkg_provider_k8s.DeployAppRequest'
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+      summary: Preview endpoint deployment YAML
+      tags:
+      - Endpoints
+  /api/v1/k8s/pvcs:
+    get:
+      consumes:
+      - application/json
+      description: Get all PersistentVolumeClaims available in the namespace
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/waverless_pkg_interfaces.PVCInfo'
+            type: array
+      summary: List PVCs
+      tags:
+      - K8s
+  /api/v1/k8s/specs:
+    get:
+      description: Get all available resource specs
+      parameters:
+      - description: Filter by category (cpu, gpu)
+        in: query
+        name: category
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/waverless_pkg_interfaces.SpecInfo'
+            type: array
+      summary: List all specs
+      tags:
+      - Specs
+    post:
+      consumes:
+      - application/json
+      description: Create a new resource specification
+      parameters:
+      - description: Spec creation request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/waverless_pkg_interfaces.CreateSpecRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/waverless_pkg_interfaces.SpecInfo'
+      summary: Create spec
+      tags:
+      - Specs
+  /api/v1/k8s/specs/{name}:
+    delete:
+      description: Delete a resource specification (soft delete)
+      parameters:
+      - description: Spec name
+        in: path
+        name: name
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Delete spec
+      tags:
+      - Specs
+    get:
+      description: Get detailed information for specified spec
+      parameters:
+      - description: Spec name
+        in: path
+        name: name
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/waverless_pkg_interfaces.SpecInfo'
+      summary: Get spec details
+      tags:
+      - Specs
+    put:
+      consumes:
+      - application/json
+      description: Update an existing resource specification
+      parameters:
+      - description: Spec name
+        in: path
+        name: name
+        required: true
+        type: string
+      - description: Spec update request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/waverless_pkg_interfaces.UpdateSpecRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/waverless_pkg_interfaces.SpecInfo'
+      summary: Update spec
+      tags:
+      - Specs
+  /api/v1/k8s/specs/{name}/capacity:
+    get:
+      description: Get capacity availability status for a specific spec
+      parameters:
+      - description: Spec name
+        in: path
+        name: name
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/waverless_pkg_interfaces.CapacityEvent'
+      summary: Get spec capacity
+      tags:
+      - Specs
+  /api/v1/k8s/specs/capacity:
+    get:
+      description: Get all specs with their capacity availability status
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/waverless_pkg_interfaces.SpecWithCapacity'
+            type: array
+      summary: List specs with capacity
+      tags:
+      - Specs
+  /api/v1/specs:
+    get:
+      description: Get all available resource specs
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/waverless_pkg_interfaces.SpecInfo'
+            type: array
+      summary: List all specs
+      tags:
+      - Specs
+  /api/v1/specs/{name}:
+    get:
+      description: Get detailed information for specified spec
+      parameters:
+      - description: Spec name
+        in: path
+        name: name
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/waverless_pkg_interfaces.SpecInfo'
+      summary: Get spec details
+      tags:
+      - Specs
+  /api/v1/statistics/endpoints:
+    get:
+      description: Get top endpoints sorted by total task count
+      parameters:
+      - description: 'Number of endpoints to return (default: 10, max: 50)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of top endpoints with their statistics
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get top endpoints by task volume
+      tags:
+      - statistics
+  /api/v1/statistics/endpoints/{endpoint}:
+    get:
+      description: Get task statistics for a specific endpoint
+      parameters:
+      - description: Endpoint name
+        in: path
+        name: endpoint
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Endpoint statistics
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get endpoint task statistics
+      tags:
+      - statistics
+  /api/v1/statistics/overview:
+    get:
+      description: Get aggregated task statistics across all endpoints
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Statistics data including total, pending, in_progress, completed,
+            failed, cancelled counts
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get global task statistics
+      tags:
+      - statistics
+  /api/v1/webhooks/dockerhub:
+    post:
+      consumes:
+      - application/json
+      description: Receive DockerHub webhook notifications for image updates
+      parameters:
+      - description: DockerHub webhook payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/app_handler.DockerHubWebhookPayload'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: DockerHub webhook
+      tags:
+      - Webhooks
+  /api/v1/workers/:id:
+    get:
+      description: Get worker detail by worker ID (e.g., "worker-abc123")
+      parameters:
+      - description: Worker ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/app_handler.WorkerDetailResponse'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get worker detail by worker ID
+      tags:
+      - worker
+  /api/v1/workers/{workerId}/status-events:
+    get:
+      description: Get status events for a specific worker with optional filters
+      parameters:
+      - description: Worker ID
+        in: path
+        name: workerId
+        required: true
+        type: string
+      - default: 50
+        description: Maximum number of events to return
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Number of events to skip
+        in: query
+        name: offset
+        type: integer
+      - description: Filter events created at or after this time (RFC3339 format)
+        in: query
+        name: start_time
+        type: string
+      - description: Filter events created at or before this time (RFC3339 format)
+        in: query
+        name: end_time
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/app_handler.StatusEventResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List status events for worker
+      tags:
+      - Status Events
+  /cancel/{task_id}:
+    post:
+      description: Cancel task by task ID
+      parameters:
+      - description: Task ID
+        in: path
+        name: task_id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Cancel task
+      tags:
+      - tasks
+  /endpoints/:name/workers/:pod_name/describe:
+    get:
+      description: Get worker and corresponding Pod details (similar to kubectl describe
+        pod)
+      parameters:
+      - description: Endpoint name
+        in: path
+        name: name
+        required: true
+        type: string
+      - description: Pod name
+        in: path
+        name: pod_name
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/waverless_pkg_interfaces.PodDetail'
+      summary: Get worker details
+      tags:
+      - worker
+  /endpoints/:name/workers/:pod_name/yaml:
+    get:
+      description: Get worker Pod YAML (similar to kubectl get pod -o yaml)
+      parameters:
+      - description: Endpoint name
+        in: path
+        name: name
+        required: true
+        type: string
+      - description: Pod name
+        in: path
+        name: pod_name
+        required: true
+        type: string
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: Pod YAML
+          schema:
+            type: string
+      summary: Get worker Pod YAML
+      tags:
+      - worker
+  /job-take:
+    get:
+      description: Worker pulls pending tasks from queue
+      parameters:
+      - description: Worker ID
+        in: query
+        name: worker_id
+        required: true
+        type: string
+      - description: Endpoint that worker belongs to
+        in: query
+        name: endpoint
+        type: string
+      - description: Whether there are tasks in progress (0 or 1)
+        in: query
+        name: job_in_progress
+        type: string
+      - description: Batch pull count
+        in: query
+        name: batch_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/waverless_internal_model.JobInfo'
+            type: array
+        "204":
+          description: No tasks available
+      summary: Pull tasks
+      tags:
+      - worker
+  /ping:
+    get:
+      consumes:
+      - application/json
+      description: Worker sends periodic heartbeat to maintain online status
+      parameters:
+      - description: Worker ID
+        in: query
+        name: worker_id
+        required: true
+        type: string
+      - description: Endpoint that worker belongs to
+        in: query
+        name: endpoint
+        type: string
+      - collectionFormat: csv
+        description: List of task IDs in progress
+        in: query
+        items:
+          type: string
+        name: job_in_progress
+        type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Worker heartbeat
+      tags:
+      - worker
+  /result:
+    post:
+      consumes:
+      - application/json
+      description: Worker submits result after completing task (RunPod format compatible)
+      parameters:
+      - description: Task result
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/waverless_internal_model.JobResultRequest'
+      - description: Task ID (from URL path)
+        in: path
+        name: task_id
+        type: string
+      - description: Task ID (RunPod compatibility)
+        in: header
+        name: X-Request-ID
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Submit task result
+      tags:
+      - worker
+  /status/{task_id}:
+    get:
+      description: Get task status by task ID
+      parameters:
+      - description: Task ID
+        in: path
+        name: task_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/waverless_internal_model.TaskResponse'
+      summary: Get task status
+      tags:
+      - tasks
+  /tasks:
+    get:
+      description: Get task list, supports filtering by status, endpoint and task_id,
+        supports pagination, returns tasks array and total count
+      parameters:
+      - description: Task status (PENDING, IN_PROGRESS, COMPLETED, FAILED)
+        in: query
+        name: status
+        type: string
+      - description: Endpoint name
+        in: query
+        name: endpoint
+        type: string
+      - description: Task ID (exact match)
+        in: query
+        name: task_id
+        type: string
+      - description: Return count limit (default 20)
+        in: query
+        name: limit
+        type: integer
+      - description: Offset (default 0)
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 'Return format: {tasks: [], total: 0, limit: 20, offset: 0}'
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get task list
+      tags:
+      - tasks
+  /tasks/{task_id}/events:
+    get:
+      description: Get complete event log for task
+      parameters:
+      - description: Task ID
+        in: path
+        name: task_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get all task events
+      tags:
+      - tasks
+  /tasks/{task_id}/execution-history:
+    get:
+      description: Get task execution history records (worker, start time, end time,
+        duration)
+      parameters:
+      - description: Task ID
+        in: path
+        name: task_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get task execution history
+      tags:
+      - tasks
+  /tasks/{task_id}/timeline:
+    get:
+      description: Get simplified timeline for task (key events)
+      parameters:
+      - description: Task ID
+        in: path
+        name: task_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get task timeline
+      tags:
+      - tasks
+  /workers:
+    get:
+      description: Get all workers (including creating, running, and terminating Pods)
+      parameters:
+      - description: Filter by endpoint
+        in: query
+        name: endpoint
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/app_handler.WorkerWithPodInfo'
+            type: array
+      summary: Get worker list
+      tags:
+      - worker
+schemes:
+- http
+- https
+swagger: "2.0"

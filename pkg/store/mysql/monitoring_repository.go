@@ -2,6 +2,7 @@ package mysql
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -9,6 +10,25 @@ import (
 
 	"gorm.io/gorm/clause"
 )
+
+// microsBetweenSQL returns a SQL expression for the microsecond difference
+// equivalent to MySQL's TIMESTAMPDIFF(MICROSECOND, a, b) (i.e. b - a).
+// The PostgreSQL branch uses negated "(a - b)" rather than "(b - a)" so that the
+// relative order of any `?` placeholders contained in a and b is preserved.
+func (r *MonitoringRepository) microsBetweenSQL(a, b string) string {
+	if r.ds.IsPostgres() {
+		return fmt.Sprintf("(EXTRACT(EPOCH FROM (%s - %s)) * -1000000)", a, b)
+	}
+	return fmt.Sprintf("TIMESTAMPDIFF(MICROSECOND, %s, %s)", a, b)
+}
+
+// castIntType returns the SQL type used to cast a numeric expression to an integer.
+func (r *MonitoringRepository) castIntType() string {
+	if r.ds.IsPostgres() {
+		return "BIGINT"
+	}
+	return "SIGNED"
+}
 
 // Helper functions for type conversion from map
 func toInt(v interface{}) int {
@@ -250,47 +270,48 @@ func (r *MonitoringRepository) AggregateMinuteStats(ctx context.Context, endpoin
 		MaxIdleMs float64 `gorm:"column:max_idle_ms"`
 		Count     int     `gorm:"column:cnt"`
 	}
-	r.ds.DB(ctx).Raw(`
+	idleExpr := r.microsBetweenSQL("?", "event_time")
+	r.ds.DB(ctx).Raw(fmt.Sprintf(`
 		SELECT 
-			COALESCE(SUM(CAST(LEAST(idle_duration_ms, TIMESTAMPDIFF(MICROSECOND, ?, event_time) / 1000) AS DECIMAL(20,4))), 0) as sum_idle_ms,
-			COALESCE(MAX(CAST(LEAST(idle_duration_ms, TIMESTAMPDIFF(MICROSECOND, ?, event_time) / 1000) AS DECIMAL(20,4))), 0) as max_idle_ms,
+			COALESCE(SUM(CAST(LEAST(idle_duration_ms, %s / 1000) AS DECIMAL(20,4))), 0) as sum_idle_ms,
+			COALESCE(MAX(CAST(LEAST(idle_duration_ms, %s / 1000) AS DECIMAL(20,4))), 0) as max_idle_ms,
 			COUNT(*) as cnt
 		FROM worker_events 
 		WHERE endpoint = ? AND event_time >= ? AND event_time < ? 
 		AND event_type = 'WORKER_TASK_PULLED' AND idle_duration_ms IS NOT NULL
-	`, from, from, endpoint, from, to).Scan(&eventIdleStats)
+	`, idleExpr, idleExpr), from, from, endpoint, from, to).Scan(&eventIdleStats)
 
 	// Part 2: Current idle time for workers still idle at end of window
 	// Use COALESCE(last_task_time, created_at) to handle new workers that never completed a task
 	var currentIdleMs int64
-	r.ds.DB(ctx).Raw(`
+	currentIdleExpr := r.microsBetweenSQL("GREATEST(COALESCE(last_task_time, created_at), ?)", "?")
+	r.ds.DB(ctx).Raw(fmt.Sprintf(`
 		SELECT COALESCE(CAST(SUM(
-			TIMESTAMPDIFF(MICROSECOND, 
-				GREATEST(COALESCE(last_task_time, created_at), ?), 
-				?
-			) / 1000
-		) AS SIGNED), 0)
+			%s / 1000
+		) AS %s), 0)
 		FROM workers
 		WHERE endpoint = ? AND status IN ('ONLINE', 'BUSY', 'DRAINING') AND current_jobs = 0
 		AND COALESCE(last_task_time, created_at) < ?
-	`, from, to, endpoint, to).Scan(&currentIdleMs)
+	`, currentIdleExpr, r.castIntType()), from, to, endpoint, to).Scan(&currentIdleMs)
 
 	// Part 3: WORKER_TASK_PULLED events after window [to, to+2min) - their idle started before window end
 	// Calculate how much of their idle time falls within [from, to)
 	windowMs := to.Sub(from).Milliseconds()
 	var futureIdleMs int64
-	r.ds.DB(ctx).Raw(`
+	futureFromExpr := r.microsBetweenSQL("?", "event_time")
+	futureToExpr := r.microsBetweenSQL("event_time", "?")
+	r.ds.DB(ctx).Raw(fmt.Sprintf(`
 		SELECT COALESCE(CAST(SUM(
 			LEAST(
-				TIMESTAMPDIFF(MICROSECOND, ?, event_time) / 1000,
-				LEAST(idle_duration_ms, TIMESTAMPDIFF(MICROSECOND, ?, event_time) / 1000)
+				%s / 1000,
+				LEAST(idle_duration_ms, %s / 1000)
 			)
-		) AS SIGNED), 0)
+		) AS %s), 0)
 		FROM worker_events 
 		WHERE endpoint = ? AND event_time >= ? AND event_time < ?
 		AND event_type = 'WORKER_TASK_PULLED' AND idle_duration_ms IS NOT NULL
-		AND TIMESTAMPDIFF(MICROSECOND, event_time, ?) / 1000 + idle_duration_ms > 0
-	`, from, from, endpoint, to, to.Add(2*time.Minute), to).Scan(&futureIdleMs)
+		AND %s / 1000 + idle_duration_ms > 0
+	`, futureFromExpr, futureFromExpr, r.castIntType(), futureToExpr), from, from, endpoint, to, to.Add(2*time.Minute), to).Scan(&futureIdleMs)
 
 	totalIdleMs := int64(eventIdleStats.SumIdleMs) + currentIdleMs + futureIdleMs
 	if totalIdleMs > windowMs*int64(workerStats.TotalWorkers) && workerStats.TotalWorkers > 0 {

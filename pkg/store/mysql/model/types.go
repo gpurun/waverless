@@ -6,6 +6,19 @@ import (
 	"fmt"
 )
 
+// scanJSONBytes normalizes a raw database value into bytes.
+// It accepts both []byte (MySQL) and string (some PostgreSQL drivers).
+func scanJSONBytes(value interface{}) ([]byte, bool) {
+	switch v := value.(type) {
+	case []byte:
+		return v, true
+	case string:
+		return []byte(v), true
+	default:
+		return nil, false
+	}
+}
+
 // JSONMap is a custom type for JSON columns (map[string]interface{})
 type JSONMap map[string]interface{}
 
@@ -15,7 +28,7 @@ func (j *JSONMap) Scan(value interface{}) error {
 		*j = nil
 		return nil
 	}
-	bytes, ok := value.([]byte)
+	bytes, ok := scanJSONBytes(value)
 	if !ok {
 		return fmt.Errorf("failed to unmarshal JSONMap value: %v", value)
 	}
@@ -42,7 +55,7 @@ func (j *JSONStringArray) Scan(value interface{}) error {
 		*j = nil
 		return nil
 	}
-	bytes, ok := value.([]byte)
+	bytes, ok := scanJSONBytes(value)
 	if !ok {
 		return fmt.Errorf("failed to unmarshal JSONStringArray value: %v", value)
 	}

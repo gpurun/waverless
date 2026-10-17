@@ -3,8 +3,11 @@ package router
 import (
 	"waverless/app/handler"
 	"waverless/app/middleware"
+	_ "waverless/docs"
 
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 // Handlers aggregates all handlers
@@ -90,4 +93,7 @@ func (r *Router) Setup(engine *gin.Engine) {
 	r.setupAdminRoutes(engine)  // Admin API (/api/v1/*)
 	r.setupPortalRoutes(engine) // Portal Southbound API (/portal/v1/*)
 	r.setupHealthRoutes(engine) // Health check
+
+	// Swagger API documentation UI
+	engine.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 }

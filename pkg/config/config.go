@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -16,6 +17,7 @@ type Config struct {
 	Server           ServerConfig           `yaml:"server"`
 	Redis            RedisConfig            `yaml:"redis"`
 	MySQL            MySQLConfig            `yaml:"mysql"`
+	Postgres         PostgreSQLConfig       `yaml:"postgres"`
 	Queue            QueueConfig            `yaml:"queue"`
 	Worker           WorkerConfig           `yaml:"worker"`
 	Logger           LoggerConfig           `yaml:"logger"`
@@ -117,6 +119,39 @@ type MySQLConfig struct {
 	Proxy    *ProxyConfig `yaml:"proxy,omitempty"` // Proxy configuration (optional)
 }
 
+// PostgreSQLConfig PostgreSQL configuration
+type PostgreSQLConfig struct {
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	User     string `yaml:"user"`
+	Password string `yaml:"password"`
+	Database string `yaml:"database"`
+	SSLMode  string `yaml:"sslmode"`  // disable, require, verify-ca, verify-full (default: disable)
+	TimeZone string `yaml:"timezone"` // session time zone (default: UTC)
+}
+
+// DSN builds a libpq keyword/value connection string for PostgreSQL.
+func (c PostgreSQLConfig) DSN() string {
+	host := c.Host
+	if host == "" {
+		host = "127.0.0.1"
+	}
+	port := c.Port
+	if port == 0 {
+		port = 5432
+	}
+	sslmode := c.SSLMode
+	if sslmode == "" {
+		sslmode = "disable"
+	}
+	tz := c.TimeZone
+	if tz == "" {
+		tz = "UTC"
+	}
+	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s TimeZone=%s",
+		host, port, c.User, c.Password, c.Database, sslmode, tz)
+}
+
 // ProxyConfig Proxy configuration for network connections
 type ProxyConfig struct {
 	Enabled bool   `yaml:"enabled"` // Enable proxy
@@ -191,6 +226,15 @@ type ProvidersConfig struct {
 	Metadata   string `yaml:"metadata"`   // Metadata storage: redis, mysql, postgres
 }
 
+// MetadataDriver returns the configured metadata storage driver.
+// Falls back to "mysql" when providers.metadata is unset.
+func (c *Config) MetadataDriver() string {
+	if c.Providers != nil && c.Providers.Metadata != "" {
+		return c.Providers.Metadata
+	}
+	return "mysql"
+}
+
 // AutoScalerConfig autoscaler configuration
 type AutoScalerConfig struct {
 	Enabled        bool `yaml:"enabled"`         // Whether to enable autoscaling
@@ -256,6 +300,39 @@ func Init() error {
 // applyEnvOverrides applies environment variable overrides to the configuration.
 // Environment variables take precedence over config file values.
 func applyEnvOverrides(cfg *Config) {
+	// Metadata storage provider selection (mysql | postgres)
+	if v := os.Getenv("METADATA_PROVIDER"); v != "" {
+		if cfg.Providers == nil {
+			cfg.Providers = &ProvidersConfig{}
+		}
+		cfg.Providers.Metadata = v
+	}
+
+	// PostgreSQL configuration
+	if v := os.Getenv("PG_HOST"); v != "" {
+		cfg.Postgres.Host = v
+	}
+	if v := os.Getenv("PG_PORT"); v != "" {
+		if port, err := strconv.Atoi(v); err == nil {
+			cfg.Postgres.Port = port
+		}
+	}
+	if v := os.Getenv("PG_USER"); v != "" {
+		cfg.Postgres.User = v
+	}
+	if v := os.Getenv("PG_PASSWORD"); v != "" {
+		cfg.Postgres.Password = v
+	}
+	if v := os.Getenv("PG_DATABASE"); v != "" {
+		cfg.Postgres.Database = v
+	}
+	if v := os.Getenv("PG_SSLMODE"); v != "" {
+		cfg.Postgres.SSLMode = v
+	}
+	if v := os.Getenv("PG_TIMEZONE"); v != "" {
+		cfg.Postgres.TimeZone = v
+	}
+
 	// Image Validation configuration
 	if v := os.Getenv("IMAGE_VALIDATION_ENABLED"); v != "" {
 		if enabled, err := strconv.ParseBool(v); err == nil {

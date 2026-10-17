@@ -12,7 +12,7 @@ redis:
 
 mysql:
   host: 127.0.0.1
-  port: 63938
+  port: 13306
   user: wavespeed
   password: wavespeed&123!
   database: waverless
@@ -22,6 +22,20 @@ mysql:
   #   type: socks5      # http, https, or socks5
   #   host: 127.0.0.1
   #   port: 7890
+
+# PostgreSQL configuration.
+# To use PostgreSQL as the metadata store, set providers.metadata to "postgres"
+# (or export METADATA_PROVIDER=postgres) and initialize the schema with:
+#   psql -h <host> -U <user> -d <database> -f scripts/init_postgres.sql
+postgres:
+  host: 127.0.0.1
+  port: 5432
+  user: wavespeed
+  password: wavespeed&123!
+  database: waverless
+  sslmode: disable   # disable, require, verify-ca, verify-full
+  timezone: UTC
+
 queue:
   concurrency: 10
   max_retry: 3

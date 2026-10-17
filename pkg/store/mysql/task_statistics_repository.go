@@ -60,6 +60,39 @@ func (r *TaskStatisticsRepository) ListTopEndpoints(ctx context.Context, limit i
 	return stats, nil
 }
 
+// upsertTaskStatisticsSQL returns the dialect-specific upsert statement for the
+// task_statistics table. The unique key is (scope_type, scope_value).
+func (r *TaskStatisticsRepository) upsertTaskStatisticsSQL() string {
+	if r.ds.IsPostgres() {
+		return `
+		INSERT INTO task_statistics
+			(scope_type, scope_value, pending_count, in_progress_count, completed_count, failed_count, cancelled_count, total_count, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT (scope_type, scope_value) DO UPDATE SET
+			pending_count = EXCLUDED.pending_count,
+			in_progress_count = EXCLUDED.in_progress_count,
+			completed_count = EXCLUDED.completed_count,
+			failed_count = EXCLUDED.failed_count,
+			cancelled_count = EXCLUDED.cancelled_count,
+			total_count = EXCLUDED.total_count,
+			updated_at = EXCLUDED.updated_at
+	`
+	}
+	return `
+		INSERT INTO task_statistics
+			(scope_type, scope_value, pending_count, in_progress_count, completed_count, failed_count, cancelled_count, total_count, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON DUPLICATE KEY UPDATE
+			pending_count = VALUES(pending_count),
+			in_progress_count = VALUES(in_progress_count),
+			completed_count = VALUES(completed_count),
+			failed_count = VALUES(failed_count),
+			cancelled_count = VALUES(cancelled_count),
+			total_count = VALUES(total_count),
+			updated_at = VALUES(updated_at)
+	`
+}
+
 // RefreshGlobalStatistics recalculates and updates global statistics from tasks table
 // OPTIMIZATION: Only counts active tasks (PENDING, IN_PROGRESS) from full table scan.
 // For historical tasks (COMPLETED, FAILED, CANCELLED), relies on incremental updates to avoid scanning large datasets.
@@ -122,20 +155,9 @@ func (r *TaskStatisticsRepository) RefreshGlobalStatistics(ctx context.Context) 
 		UpdatedAt:       now,
 	}
 
-	// Use ON DUPLICATE KEY UPDATE via GORM
-	err = r.ds.DB(ctx).Exec(`
-		INSERT INTO task_statistics
-			(scope_type, scope_value, pending_count, in_progress_count, completed_count, failed_count, cancelled_count, total_count, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON DUPLICATE KEY UPDATE
-			pending_count = VALUES(pending_count),
-			in_progress_count = VALUES(in_progress_count),
-			completed_count = VALUES(completed_count),
-			failed_count = VALUES(failed_count),
-			cancelled_count = VALUES(cancelled_count),
-			total_count = VALUES(total_count),
-			updated_at = VALUES(updated_at)
-	`, globalStats.ScopeType, globalStats.ScopeValue, globalStats.PendingCount, globalStats.InProgressCount,
+	// Use dialect-specific upsert
+	err = r.ds.DB(ctx).Exec(r.upsertTaskStatisticsSQL(),
+		globalStats.ScopeType, globalStats.ScopeValue, globalStats.PendingCount, globalStats.InProgressCount,
 		globalStats.CompletedCount, globalStats.FailedCount, globalStats.CancelledCount,
 		globalStats.TotalCount, globalStats.UpdatedAt).Error
 
@@ -165,9 +187,14 @@ func (r *TaskStatisticsRepository) RefreshEndpointStatistics(ctx context.Context
 	var stats TaskStats
 	// OPTIMIZATION: Use UNION ALL with idx_endpoint_status composite index
 	// Each subquery can use the index (endpoint, status) efficiently
-	err := r.ds.DB(ctx).Raw(`
+	endpointExpr := "?"
+	if r.ds.IsPostgres() {
+		// PostgreSQL cannot infer the type of a bare parameter in a SELECT list.
+		endpointExpr = "?::text"
+	}
+	statsQuery := fmt.Sprintf(`
 		SELECT
-			? as endpoint,
+			%s as endpoint,
 			SUM(pending_count) as pending_count,
 			SUM(in_progress_count) as in_progress_count,
 			SUM(completed_count) as completed_count,
@@ -190,7 +217,8 @@ func (r *TaskStatisticsRepository) RefreshEndpointStatistics(ctx context.Context
 			SELECT 0, 0, 0, 0, COUNT(*), COUNT(*)
 			FROM tasks WHERE endpoint = ? AND status = 'CANCELLED'
 		) AS status_counts
-	`, endpoint, endpoint, endpoint, endpoint, endpoint, endpoint).Scan(&stats).Error
+	`, endpointExpr)
+	err := r.ds.DB(ctx).Raw(statsQuery, endpoint, endpoint, endpoint, endpoint, endpoint, endpoint).Scan(&stats).Error
 	if err != nil {
 		return fmt.Errorf("failed to calculate endpoint statistics: %w", err)
 	}
@@ -208,19 +236,8 @@ func (r *TaskStatisticsRepository) RefreshEndpointStatistics(ctx context.Context
 		UpdatedAt:       now,
 	}
 
-	err = r.ds.DB(ctx).Exec(`
-		INSERT INTO task_statistics
-			(scope_type, scope_value, pending_count, in_progress_count, completed_count, failed_count, cancelled_count, total_count, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON DUPLICATE KEY UPDATE
-			pending_count = VALUES(pending_count),
-			in_progress_count = VALUES(in_progress_count),
-			completed_count = VALUES(completed_count),
-			failed_count = VALUES(failed_count),
-			cancelled_count = VALUES(cancelled_count),
-			total_count = VALUES(total_count),
-			updated_at = VALUES(updated_at)
-	`, endpointStats.ScopeType, endpointStats.ScopeValue, endpointStats.PendingCount,
+	err = r.ds.DB(ctx).Exec(r.upsertTaskStatisticsSQL(),
+		endpointStats.ScopeType, endpointStats.ScopeValue, endpointStats.PendingCount,
 		endpointStats.InProgressCount, endpointStats.CompletedCount, endpointStats.FailedCount,
 		endpointStats.CancelledCount, endpointStats.TotalCount, endpointStats.UpdatedAt).Error
 
@@ -311,7 +328,15 @@ func (r *TaskStatisticsRepository) updateStatisticsForStatusChange(ctx context.C
 	}
 
 	// Build SQL with GREATEST() to prevent negative counts
-	sql := `
+	// The update expressions reference the existing row, which must be qualified
+	// with the table name on PostgreSQL to disambiguate from EXCLUDED.
+	prefix := ""
+	conflictClause := "ON DUPLICATE KEY UPDATE"
+	if r.ds.IsPostgres() {
+		prefix = "task_statistics."
+		conflictClause = "ON CONFLICT (scope_type, scope_value) DO UPDATE SET"
+	}
+	sql := fmt.Sprintf(`
 		INSERT INTO task_statistics (scope_type, scope_value, pending_count, in_progress_count, completed_count, failed_count, cancelled_count, total_count, updated_at)
 		VALUES (?, ?,
 			CASE WHEN ? = 'PENDING' THEN ? ELSE 0 END,
@@ -320,15 +345,16 @@ func (r *TaskStatisticsRepository) updateStatisticsForStatusChange(ctx context.C
 			CASE WHEN ? = 'FAILED' THEN ? ELSE 0 END,
 			CASE WHEN ? = 'CANCELLED' THEN ? ELSE 0 END,
 			?, ?)
-		ON DUPLICATE KEY UPDATE
-			pending_count = GREATEST(0, pending_count - CASE WHEN ? = 'PENDING' THEN ? ELSE 0 END + CASE WHEN ? = 'PENDING' THEN ? ELSE 0 END),
-			in_progress_count = GREATEST(0, in_progress_count - CASE WHEN ? = 'IN_PROGRESS' THEN ? ELSE 0 END + CASE WHEN ? = 'IN_PROGRESS' THEN ? ELSE 0 END),
-			completed_count = GREATEST(0, completed_count - CASE WHEN ? = 'COMPLETED' THEN ? ELSE 0 END + CASE WHEN ? = 'COMPLETED' THEN ? ELSE 0 END),
-			failed_count = GREATEST(0, failed_count - CASE WHEN ? = 'FAILED' THEN ? ELSE 0 END + CASE WHEN ? = 'FAILED' THEN ? ELSE 0 END),
-			cancelled_count = GREATEST(0, cancelled_count - CASE WHEN ? = 'CANCELLED' THEN ? ELSE 0 END + CASE WHEN ? = 'CANCELLED' THEN ? ELSE 0 END),
-			total_count = GREATEST(0, total_count + CASE WHEN ? = '' THEN ? ELSE 0 END),
+		%s
+			pending_count = GREATEST(0, %spending_count - CASE WHEN ? = 'PENDING' THEN ? ELSE 0 END + CASE WHEN ? = 'PENDING' THEN ? ELSE 0 END),
+			in_progress_count = GREATEST(0, %sin_progress_count - CASE WHEN ? = 'IN_PROGRESS' THEN ? ELSE 0 END + CASE WHEN ? = 'IN_PROGRESS' THEN ? ELSE 0 END),
+			completed_count = GREATEST(0, %scompleted_count - CASE WHEN ? = 'COMPLETED' THEN ? ELSE 0 END + CASE WHEN ? = 'COMPLETED' THEN ? ELSE 0 END),
+			failed_count = GREATEST(0, %sfailed_count - CASE WHEN ? = 'FAILED' THEN ? ELSE 0 END + CASE WHEN ? = 'FAILED' THEN ? ELSE 0 END),
+			cancelled_count = GREATEST(0, %scancelled_count - CASE WHEN ? = 'CANCELLED' THEN ? ELSE 0 END + CASE WHEN ? = 'CANCELLED' THEN ? ELSE 0 END),
+			total_count = GREATEST(0, %stotal_count + CASE WHEN ? = '' THEN ? ELSE 0 END),
 			updated_at = ?
-	`
+	`, conflictClause,
+		prefix, prefix, prefix, prefix, prefix, prefix)
 	args := []interface{}{
 		scopeType, *actualScopeValue,
 		toStatus, count, toStatus, count, toStatus, count, toStatus, count, toStatus, count, // INSERT VALUES

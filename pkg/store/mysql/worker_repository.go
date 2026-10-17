@@ -45,13 +45,28 @@ func (r *WorkerRepository) UpdateHeartbeat(ctx context.Context, workerID, endpoi
 		versionValue = "" // Will use COALESCE to keep existing value
 	}
 
-	// Use raw SQL with ON DUPLICATE KEY UPDATE to handle race conditions
-	// This is atomic and avoids the UPDATE-then-INSERT race condition
+	// Use raw SQL with an upsert to handle race conditions atomically
+	// (avoids the UPDATE-then-INSERT race condition).
 	// CRITICAL: Protect both DRAINING and OFFLINE terminal states from being overwritten by heartbeat.
 	// Without this, a ghost PullJobs request (from a deleted Pod) can resurrect an OFFLINE worker
 	// back to ONLINE, then IsPodTerminating marks it DRAINING, creating an uncleanable zombie worker.
 	// Also protect last_heartbeat in terminal states so CleanupOfflineWorkers can expire them.
-	sql := `
+	var sql string
+	if r.ds.IsPostgres() {
+		sql = `
+		INSERT INTO workers (worker_id, endpoint, pod_name, status, concurrency, current_jobs, jobs_in_progress, version, last_heartbeat, last_task_time, created_at, updated_at)
+		VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT (worker_id) DO UPDATE SET
+			endpoint = EXCLUDED.endpoint,
+			status = CASE WHEN workers.status IN (?, ?) THEN workers.status ELSE EXCLUDED.status END,
+			current_jobs = CASE WHEN workers.status IN (?, ?) THEN workers.current_jobs ELSE EXCLUDED.current_jobs END,
+			jobs_in_progress = CASE WHEN workers.status IN (?, ?) THEN workers.jobs_in_progress ELSE EXCLUDED.jobs_in_progress END,
+			version = CASE WHEN EXCLUDED.version = '' THEN workers.version ELSE EXCLUDED.version END,
+			last_heartbeat = CASE WHEN workers.status IN (?, ?) THEN workers.last_heartbeat ELSE EXCLUDED.last_heartbeat END,
+			updated_at = EXCLUDED.updated_at
+	`
+	} else {
+		sql = `
 		INSERT INTO workers (worker_id, endpoint, pod_name, status, concurrency, current_jobs, jobs_in_progress, version, last_heartbeat, last_task_time, created_at, updated_at)
 		VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)
 		ON DUPLICATE KEY UPDATE
@@ -63,6 +78,7 @@ func (r *WorkerRepository) UpdateHeartbeat(ctx context.Context, workerID, endpoi
 			last_heartbeat = CASE WHEN status IN (?, ?) THEN last_heartbeat ELSE VALUES(last_heartbeat) END,
 			updated_at = VALUES(updated_at)
 	`
+	}
 
 	draining := constants.WorkerStatusDraining.String()
 	offline := constants.WorkerStatusOffline.String()

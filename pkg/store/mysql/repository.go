@@ -1,8 +1,12 @@
 package mysql
 
-import "waverless/pkg/config"
+import (
+	"fmt"
 
-// Repository aggregates all MySQL repositories
+	"waverless/pkg/config"
+)
+
+// Repository aggregates all SQL repositories (MySQL or PostgreSQL)
 type Repository struct {
 	ds *Datastore
 
@@ -25,7 +29,31 @@ func NewRepository(dsn string, proxyConfig *config.ProxyConfig) (*Repository, er
 	if err != nil {
 		return nil, err
 	}
+	return newRepository(ds), nil
+}
 
+// NewPostgresRepository creates a new PostgreSQL repository with all sub-repositories
+func NewPostgresRepository(dsn string, proxyConfig *config.ProxyConfig) (*Repository, error) {
+	ds, err := NewPostgresDatastore(dsn, proxyConfig)
+	if err != nil {
+		return nil, err
+	}
+	return newRepository(ds), nil
+}
+
+// NewRepositoryForDriver creates a repository for the given driver ("mysql" or "postgres").
+func NewRepositoryForDriver(driver, dsn string, proxyConfig *config.ProxyConfig) (*Repository, error) {
+	switch driver {
+	case "", DialectMySQL, "mariadb":
+		return NewRepository(dsn, proxyConfig)
+	case DialectPostgres, "postgresql":
+		return NewPostgresRepository(dsn, proxyConfig)
+	default:
+		return nil, fmt.Errorf("unsupported metadata driver: %s", driver)
+	}
+}
+
+func newRepository(ds *Datastore) *Repository {
 	return &Repository{
 		ds:               ds,
 		Endpoint:         NewEndpointRepository(ds),
@@ -39,7 +67,7 @@ func NewRepository(dsn string, proxyConfig *config.ProxyConfig) (*Repository, er
 		Worker:           NewWorkerRepository(ds),
 		Monitoring:       NewMonitoringRepository(ds),
 		StatusEvent:      NewStatusEventRepository(ds),
-	}, nil
+	}
 }
 
 // GetDatastore returns the underlying datastore for transaction support

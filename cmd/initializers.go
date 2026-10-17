@@ -51,17 +51,34 @@ func (app *Application) initLogger() error {
 	return nil
 }
 
-// initMySQL initializes MySQL
+// initMySQL initializes the metadata database (MySQL or PostgreSQL).
+// The driver is selected via providers.metadata (mysql | postgres) or the
+// METADATA_PROVIDER environment variable.
 func (app *Application) initMySQL() error {
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=UTC",
-		app.config.MySQL.User,
-		app.config.MySQL.Password,
-		app.config.MySQL.Host,
-		app.config.MySQL.Port,
-		app.config.MySQL.Database,
-	)
+	driver := app.config.MetadataDriver()
 
-	repo, err := mysqlstore.NewRepository(dsn, app.config.MySQL.Proxy)
+	var repo *mysqlstore.Repository
+	var err error
+
+	switch driver {
+	case "postgres", "postgresql":
+		dsn := app.config.Postgres.DSN()
+		logger.InfoCtx(app.ctx, "Connecting to metadata store: postgres (%s:%d/%s)",
+			app.config.Postgres.Host, app.config.Postgres.Port, app.config.Postgres.Database)
+		repo, err = mysqlstore.NewPostgresRepository(dsn, nil)
+	default:
+		dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=UTC",
+			app.config.MySQL.User,
+			app.config.MySQL.Password,
+			app.config.MySQL.Host,
+			app.config.MySQL.Port,
+			app.config.MySQL.Database,
+		)
+		logger.InfoCtx(app.ctx, "Connecting to metadata store: mysql (%s:%d/%s)",
+			app.config.MySQL.Host, app.config.MySQL.Port, app.config.MySQL.Database)
+		repo, err = mysqlstore.NewRepository(dsn, app.config.MySQL.Proxy)
+	}
+
 	if err != nil {
 		return err
 	}
@@ -69,7 +86,7 @@ func (app *Application) initMySQL() error {
 	app.mysqlRepo = repo
 	app.registerCleanup(func() {
 		repo.Close()
-		logger.InfoCtx(app.ctx, "MySQL connection has been closed")
+		logger.InfoCtx(app.ctx, "Metadata database connection has been closed")
 	})
 
 	return nil

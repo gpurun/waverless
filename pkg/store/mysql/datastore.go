@@ -13,21 +13,39 @@ import (
 	mysqldriver "github.com/go-sql-driver/mysql"
 	"golang.org/x/net/proxy"
 	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
 	"waverless/pkg/config"
 )
 
-// Datastore wraps GORM DB and provides transaction support
+// Dialect names supported by this package.
+const (
+	DialectMySQL    = "mysql"
+	DialectPostgres = "postgres"
+)
+
+// Datastore wraps GORM DB and provides transaction support.
+// It is dialect-aware: it can be backed by MySQL or PostgreSQL.
 type Datastore struct {
-	db *gorm.DB
+	db      *gorm.DB
+	dialect string
 }
 
-// NewDatastore creates a new MySQL datastore
-func NewDatastore(dsn string, proxyConfig *config.ProxyConfig) (*Datastore, error) {
-	// Configure GORM logger
-	newLogger := logger.New(
+// Dialect returns the underlying database dialect ("mysql" or "postgres").
+func (ds *Datastore) Dialect() string {
+	return ds.dialect
+}
+
+// IsPostgres reports whether the datastore is backed by PostgreSQL.
+func (ds *Datastore) IsPostgres() bool {
+	return ds.dialect == DialectPostgres
+}
+
+// newGormLogger builds the GORM logger used by all datastores.
+func newGormLogger() logger.Interface {
+	return logger.New(
 		log.New(os.Stdout, "\r\n", log.LstdFlags),
 		logger.Config{
 			SlowThreshold:             500 * time.Millisecond, // Slow SQL threshold
@@ -36,10 +54,38 @@ func NewDatastore(dsn string, proxyConfig *config.ProxyConfig) (*Datastore, erro
 			Colorful:                  true,                   // Enable color
 		},
 	)
+}
 
+// openWithDialector opens a GORM connection using the given dialector and
+// configures the connection pool.
+func openWithDialector(dialector gorm.Dialector, dialect string) (*Datastore, error) {
+	db, err := gorm.Open(dialector, &gorm.Config{
+		Logger:                 newGormLogger(),
+		SkipDefaultTransaction: true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to database: %w", err)
+	}
+
+	// Get underlying *sql.DB and configure connection pool
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get generic database object: %w", err)
+	}
+
+	// Connection pool settings
+	sqlDB.SetMaxOpenConns(100)                 // Maximum open connections
+	sqlDB.SetMaxIdleConns(10)                  // Maximum idle connections
+	sqlDB.SetConnMaxLifetime(time.Hour)        // Connection max lifetime
+	sqlDB.SetConnMaxIdleTime(10 * time.Minute) // Connection max idle time
+
+	return &Datastore{db: db, dialect: dialect}, nil
+}
+
+// NewDatastore creates a new MySQL datastore
+func NewDatastore(dsn string, proxyConfig *config.ProxyConfig) (*Datastore, error) {
 	// Configure MySQL driver with custom dialer if proxy is enabled
-	var finalDSN string
-	var err error
+	finalDSN := dsn
 
 	if proxyConfig != nil && proxyConfig.Enabled {
 		// Parse DSN to get MySQL config
@@ -61,33 +107,18 @@ func NewDatastore(dsn string, proxyConfig *config.ProxyConfig) (*Datastore, erro
 		finalDSN = cfg.FormatDSN()
 
 		log.Printf("MySQL proxy enabled: %s://%s:%d", proxyConfig.Type, proxyConfig.Host, proxyConfig.Port)
-	} else {
-		finalDSN = dsn
 	}
 
-	// Open database connection
-	db, err := gorm.Open(mysql.Open(finalDSN), &gorm.Config{
-		Logger:                 newLogger,
-		SkipDefaultTransaction: true,
-	})
+	return openWithDialector(mysql.Open(finalDSN), DialectMySQL)
+}
 
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to database: %w", err)
+// NewPostgresDatastore creates a new PostgreSQL datastore.
+// Note: the SOCKS5/HTTP proxy option is MySQL-specific and is not applied to PostgreSQL.
+func NewPostgresDatastore(dsn string, proxyConfig *config.ProxyConfig) (*Datastore, error) {
+	if proxyConfig != nil && proxyConfig.Enabled {
+		log.Printf("PostgreSQL proxy configuration is not supported and will be ignored")
 	}
-
-	// Get underlying *sql.DB and configure connection pool
-	sqlDB, err := db.DB()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get generic database object: %w", err)
-	}
-
-	// Connection pool settings
-	sqlDB.SetMaxOpenConns(100)                  // Maximum open connections
-	sqlDB.SetMaxIdleConns(10)                   // Maximum idle connections
-	sqlDB.SetConnMaxLifetime(time.Hour)         // Connection max lifetime
-	sqlDB.SetConnMaxIdleTime(10 * time.Minute) // Connection max idle time
-
-	return &Datastore{db: db}, nil
+	return openWithDialector(postgres.Open(dsn), DialectPostgres)
 }
 
 // dialWithProxy creates a connection through proxy

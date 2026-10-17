@@ -9,6 +9,11 @@ import (
 	"waverless/pkg/logger"
 )
 
+// @title Waverless API
+// @version 1.0
+// @description Waverless Serverless GPU Task Orchestration API
+// @BasePath /
+// @schemes http https
 func main() {
 	// Create application instance
 	app := NewApplication()
@@ -37,4 +42,3 @@ func main() {
 
 	logger.InfoCtx(app.ctx, "Application safely exited")
 }
-
