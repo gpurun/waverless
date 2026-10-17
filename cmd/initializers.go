@@ -11,6 +11,7 @@ import (
 	"waverless/internal/service"
 	endpointsvc "waverless/internal/service/endpoint"
 	gongjisvc "waverless/internal/service/gongji"
+	controlsvc "waverless/internal/service/control"
 	"waverless/internal/service/lifecycle"
 	"waverless/pkg/placement"
 	"waverless/pkg/autoscaler"
@@ -368,6 +369,24 @@ func (app *Application) initHandlers() error {
 	app.monitoringHandler = handler.NewMonitoringHandler(app.monitoringService)
 	app.portalHandler = handler.NewPortalHandler(app.taskService, app.workerService, app.endpointService, app.deploymentProvider)
 
+	if app.endpointService != nil && app.deploymentProvider != nil && app.mysqlRepo != nil {
+		var placementSvc *placement.Service
+		if app.providerHub != nil {
+			placementSvc = app.providerHub.Placement()
+		}
+		controlService := controlsvc.NewService(
+			app.mysqlRepo.Endpoint,
+			app.mysqlRepo.ProviderSlice,
+			app.endpointService,
+			app.workerService,
+			app.deploymentProvider,
+			placementSvc,
+			app.config.Server.BaseURL,
+		)
+		app.controlHandler = handler.NewControlHandler(controlService)
+		logger.InfoCtx(app.ctx, "Control handler initialized for /control/v1")
+	}
+
 	// Initialize Endpoint Handler (for K8s, Novita, or Gongji)
 	if app.config.K8s.Enabled || app.config.Novita.Enabled || app.config.Gongji.Enabled {
 		if app.deploymentProvider == nil {
@@ -555,6 +574,7 @@ func (app *Application) initHTTPServer() error {
 		app.monitoringHandler,
 		app.statusEventHandler,
 		app.portalHandler,
+		app.controlHandler,
 	)
 	r.SetGongjiHandler(app.gongjiHandler)
 

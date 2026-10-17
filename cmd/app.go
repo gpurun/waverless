@@ -57,6 +57,7 @@ type Application struct {
 	monitoringHandler  *handler.MonitoringHandler
 	statusEventHandler *handler.StatusEventHandler
 	portalHandler      *handler.PortalHandler
+	controlHandler     *handler.ControlHandler
 	gongjiHandler      *handler.GongjiHandler
 
 	gongjiCatalog *gongji.Catalog
